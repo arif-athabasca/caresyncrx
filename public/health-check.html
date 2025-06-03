@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CareSyncRx Health Check</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        header {
+            background-color: #0070f3;
+            color: white;
+            padding: 1rem;
+            border-radius: 5px;
+            margin-bottom: 2rem;
+            text-align: center;
+        }
+        h1 {
+            margin-top: 0;
+        }
+        .card {
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .card h2 {
+            margin-top: 0;
+            color: #0070f3;
+        }
+        .success {
+            color: #00a969;
+            font-weight: bold;
+        }
+        .error {
+            color: #e00;
+            font-weight: bold;
+        }
+        .warning {
+            color: #f90;
+            font-weight: bold;
+        }
+        button {
+            background-color: #0070f3;
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 1rem;
+            margin-top: 0.5rem;
+        }
+        button:hover {
+            background-color: #005cc5;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 1rem;
+        }
+        th, td {
+            text-align: left;
+            padding: 0.5rem;
+            border-bottom: 1px solid #ddd;
+        }
+        th {
+            background-color: #f5f5f5;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>CareSyncRx Health Check</h1>
+    </header>
+
+    <div class="card">
+        <h2>System Status</h2>
+        <p>Use this page to verify that your CareSyncRx installation is working correctly.</p>
+        <table>
+            <tr>
+                <th>Component</th>
+                <th>Status</th>
+                <th>Details</th>
+            </tr>
+            <tr>
+                <td>Next.js Server</td>
+                <td id="server-status">Checking...</td>
+                <td id="server-details"></td>
+            </tr>
+            <tr>
+                <td>Authentication</td>
+                <td id="auth-status">Checking...</td>
+                <td id="auth-details"></td>
+            </tr>
+            <tr>
+                <td>API Endpoints</td>
+                <td id="api-status">Checking...</td>
+                <td id="api-details"></td>
+            </tr>
+            <tr>
+                <td>Database</td>
+                <td id="db-status">Checking...</td>
+                <td id="db-details"></td>
+            </tr>
+        </table>
+        <button id="refresh-btn">Refresh Status</button>
+    </div>
+
+    <div class="card">
+        <h2>Environment Information</h2>
+        <table id="env-info">
+            <tr>
+                <th>Setting</th>
+                <th>Value</th>
+            </tr>
+            <tr>
+                <td>Node.js Version</td>
+                <td id="node-version">Checking...</td>
+            </tr>
+            <tr>
+                <td>Next.js Version</td>
+                <td id="next-version">Checking...</td>
+            </tr>
+            <tr>
+                <td>Environment</td>
+                <td id="environment">Checking...</td>
+            </tr>
+            <tr>
+                <td>Auth Provider</td>
+                <td id="auth-provider">Checking...</td>
+            </tr>
+        </table>
+    </div>
+
+    <div class="card">
+        <h2>Quick Actions</h2>
+        <p>Use these links to quickly navigate to important pages:</p>
+        <ul>
+            <li><a href="/login">Login Page</a></li>
+            <li><a href="/register">Registration Page</a></li>
+            <li><a href="/dashboard">Dashboard</a></li>
+            <li><a href="/api/health">API Health Check</a></li>
+        </ul>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            checkServerStatus();
+            
+            document.getElementById('refresh-btn').addEventListener('click', function() {
+                resetStatus();
+                checkServerStatus();
+            });
+        });
+
+        function resetStatus() {
+            document.getElementById('server-status').textContent = 'Checking...';
+            document.getElementById('server-details').textContent = '';
+            document.getElementById('auth-status').textContent = 'Checking...';
+            document.getElementById('auth-details').textContent = '';
+            document.getElementById('api-status').textContent = 'Checking...';
+            document.getElementById('api-details').textContent = '';
+            document.getElementById('db-status').textContent = 'Checking...';
+            document.getElementById('db-details').textContent = '';
+            document.getElementById('node-version').textContent = 'Checking...';
+            document.getElementById('next-version').textContent = 'Checking...';
+            document.getElementById('environment').textContent = 'Checking...';
+            document.getElementById('auth-provider').textContent = 'Checking...';
+        }
+
+        function checkServerStatus() {
+            // Check server status
+            fetch('/api/health')
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    document.getElementById('server-status').innerHTML = '<span class="success">Online</span>';
+                    document.getElementById('server-details').textContent = `Server uptime: ${data.uptime || 'Unknown'}`;
+                    
+                    // Populate environment info
+                    document.getElementById('node-version').textContent = data.nodeVersion || 'Unknown';
+                    document.getElementById('next-version').textContent = data.nextVersion || 'Unknown';
+                    document.getElementById('environment').textContent = data.environment || 'Development';
+                    document.getElementById('auth-provider').textContent = data.authProvider || 'JWT';
+                    
+                    // Check other components
+                    document.getElementById('auth-status').innerHTML = data.auth ? '<span class="success">Available</span>' : '<span class="warning">Unknown</span>';
+                    document.getElementById('auth-details').textContent = data.auth ? 'Authentication service is running' : 'Could not verify auth service';
+                    
+                    document.getElementById('api-status').innerHTML = '<span class="success">Available</span>';
+                    document.getElementById('api-details').textContent = 'API endpoints are responding';
+                    
+                    document.getElementById('db-status').innerHTML = data.database ? '<span class="success">Connected</span>' : '<span class="error">Not Connected</span>';
+                    document.getElementById('db-details').textContent = data.database ? 'Database connection established' : 'Could not connect to database';
+                })
+                .catch(error => {
+                    console.error('Error checking server status:', error);
+                    document.getElementById('server-status').innerHTML = '<span class="error">Offline</span>';
+                    document.getElementById('server-details').textContent = 'Could not connect to server';
+                    
+                    document.getElementById('auth-status').innerHTML = '<span class="error">Unavailable</span>';
+                    document.getElementById('auth-details').textContent = 'Cannot check authentication service';
+                    
+                    document.getElementById('api-status').innerHTML = '<span class="error">Unavailable</span>';
+                    document.getElementById('api-details').textContent = 'API endpoints are not responding';
+                    
+                    document.getElementById('db-status').innerHTML = '<span class="error">Unknown</span>';
+                    document.getElementById('db-details').textContent = 'Cannot check database connection';
+                });
+        }
+    </script>
+</body>
+</html>

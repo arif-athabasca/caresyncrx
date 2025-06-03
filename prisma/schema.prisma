@@ -1,0 +1,439 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                   String                 @id @default(cuid())
+  email                String                 @unique
+  password             String
+  role                 UserRole               @default(NURSE)
+  clinicId             String
+  failedLoginAttempts  Int                    @default(0)
+  lastFailedLogin      DateTime?
+  lastPasswordChange   DateTime               @default(now())
+  lockedUntil          DateTime?
+  passwordExpiresAt    DateTime
+  backupCodes          String[]               @default([])
+  twoFactorEnabled     Boolean                @default(false)
+  twoFactorMethod      String?                @db.VarChar(20)
+  twoFactorSecret      String?
+  lastVerifyAttempt    DateTime?
+  verifyAttempts       Int                    @default(0)
+  createdAt            DateTime               @default(now())
+  updatedAt            DateTime               @updatedAt
+  clinic               Clinic                 @relation(fields: [clinicId], references: [id])
+  auditLogs            AuditLog[]
+  prescriptions        Prescription[]
+  refreshTokens        RefreshToken[]
+  tasks                Task[]
+  devices              UserDevice[]
+  providerNotes        ProviderNote[]
+  passwordResetTokens  PasswordResetToken[]
+  twoFactorSetups      TwoFactorSetup?
+  assignedTriages      PatientTriage[]      @relation("AssignedTriages")
+  adminAssignedTriages PatientTriage[]      @relation("AdminAssignedTriages")
+  completedActions     CareAction[]
+  availability         ProviderAvailability[]
+  specialties          ProviderSpecialty[]
+  billingRecords       BillingRecord[]
+
+  @@index([email])
+  @@index([clinicId])
+}
+
+model RefreshToken {
+  id          String   @id @default(cuid())
+  token       String   @unique
+  userId      String
+  expiresAt   DateTime
+  createdAt   DateTime @default(now())
+  isValid     Boolean  @default(true)
+  deviceId    String?
+  fingerprint String?
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+  @@index([userId])
+  @@index([deviceId])
+  @@index([fingerprint])
+}
+
+model UserDevice {
+  id             String       @id @default(cuid())
+  userId         String
+  deviceId       String
+  userAgent      String?
+  lastUsed       DateTime     @default(now())
+  createdAt      DateTime     @default(now())
+  blockedUntil   DateTime?
+  deviceName     String?
+  deviceType     String?
+  failedAttempts Int          @default(0)
+  isVerified     Boolean      @default(false)
+  lastIpAddress  String?      @db.VarChar(45)
+  location       String?
+  status         DeviceStatus @default(PENDING_VERIFICATION)
+  trustLevel     Int          @default(0)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, deviceId])
+  @@index([userId])
+  @@index([deviceId])
+  @@index([status])
+}
+
+model Clinic {
+  id       String    @id @default(cuid())
+  name     String
+  address  String
+  patients Patient[]
+  users    User[]
+}
+
+model Patient {
+  id           String         @id @default(cuid())
+  firstName    String
+  lastName     String
+  dateOfBirth  DateTime       @db.Date
+  language     String
+  clinicId     String
+  clinic       Clinic         @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  prescriptions Prescription[]
+  auditLogs    AuditLog[]
+  tasks        Task[]
+  triages      PatientTriage[]
+  insurance    PatientInsurance[]
+  billing      BillingRecord[]
+
+  @@index([clinicId])
+  @@index([firstName, lastName])
+}
+
+model AuditLog {
+  id         String    @id @default(cuid())
+  patientId  String?
+  userId     String?
+  action     String
+  details    Json?
+  ip_address String?   @db.VarChar(45)
+  user_agent String?
+  timestamp  DateTime  @default(now()) @db.Timestamptz(6)
+  patient    Patient?  @relation(fields: [patientId], references: [id])
+  user       User?     @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([patientId])
+  @@index([timestamp])
+  @@index([action])
+}
+
+model Prescription {
+  id           String        @id @default(cuid())
+  patientId    String
+  drugName     String
+  dosage       String
+  issueDate    DateTime      @db.Timestamptz(6)
+  refillDate   DateTime?     @db.Timestamptz(6)
+  status       RxStatus      @default(ACTIVE)
+  userId       String
+  patient      Patient       @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  user         User          @relation(fields: [userId], references: [id])
+  tasks        Task[]
+
+  @@index([patientId])
+  @@index([userId])
+  @@index([status])
+}
+
+model PasswordResetToken {
+  id        String   @id @default(cuid())
+  userId    String
+  tokenHash String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([expiresAt])
+  @@index([tokenHash])
+  @@index([userId])
+}
+
+model ProviderNote {
+  id         String    @id @default(cuid())
+  providerId String
+  noteText   String
+  createdAt  DateTime  @default(now()) @db.Timestamptz(6)
+  user       User      @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  tasks      Task[]
+
+  @@index([providerId])
+}
+
+model Task {
+  id             String        @id @default(cuid())
+  description    String
+  dueDate        DateTime?     @db.Date
+  priority       String?
+  status         String?
+  providerId     String
+  patientId      String?
+  providerNoteId String?
+  prescriptionId String?
+  patient        Patient?      @relation(fields: [patientId], references: [id])
+  prescription   Prescription? @relation(fields: [prescriptionId], references: [id])
+  user           User          @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  providerNote   ProviderNote? @relation(fields: [providerNoteId], references: [id])
+
+  @@index([patientId])
+  @@index([prescriptionId])
+  @@index([providerId])
+  @@index([providerNoteId])
+}
+
+// Model to store temporary two-factor authentication setup data
+model TwoFactorSetup {
+  userId      String    @id
+  secret      String    
+  verified    Boolean   @default(false)
+  backupCodes String[]  @default([])
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// Model to track failed login attempts for rate limiting
+model LoginAttempt {
+  id        String    @id @default(cuid())
+  email     String    @db.VarChar(255)
+  ipAddress String    @db.VarChar(45)
+  userAgent String?   @db.Text
+  createdAt DateTime  @default(now())
+  success   Boolean   @default(false)
+
+  @@index([email])
+  @@index([ipAddress])
+  @@index([createdAt])
+}
+
+enum DeviceStatus {
+  ACTIVE
+  SUSPENDED
+  BLOCKED
+  PENDING_VERIFICATION
+}
+
+enum UserRole {
+  ADMIN
+  DOCTOR
+  PHARMACIST
+  NURSE
+}
+
+enum RxStatus {
+  ACTIVE
+  COMPLETED
+  CANCELLED
+  ON_HOLD
+}
+
+enum NotificationType {
+  PRESCRIPTION_CREATED
+  PRESCRIPTION_UPDATED
+  TRIAGE_ALERT
+  DIAGNOSIS_READY
+}
+
+enum TriageUrgency {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum TriageStatus {
+  PENDING
+  ASSIGNED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum ActionStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum BillingStatus {
+  PENDING
+  SUBMITTED
+  PAID
+  DENIED
+  PARTIAL
+}
+
+// Model for security audit logging
+model SecurityAuditLog {
+  id          String    @id @default(uuid())
+  timestamp   DateTime  @default(now())
+  eventType   String    @db.VarChar(50)
+  severity    String    @db.VarChar(20)
+  userId      String?   @db.VarChar(50)
+  username    String?   @db.VarChar(255)
+  ipAddress   String?   @db.VarChar(45)
+  userAgent   String?   @db.Text
+  path        String?   @db.VarChar(255)
+  method      String?   @db.VarChar(10)
+  description String    @db.Text
+  metadata    String?   @db.Text
+
+  @@index([timestamp])
+  @@index([eventType])
+  @@index([severity])
+  @@index([userId])
+  @@index([ipAddress])
+}
+
+// Triage System - Models for the AI-based triage system
+model PatientTriage {
+  id                String              @id @default(cuid())
+  patientId         String?
+  symptoms          String              @db.Text
+  urgencyLevel      TriageUrgency       @default(MEDIUM)
+  notes             String?             @db.Text
+  status            TriageStatus        @default(PENDING)
+  assignedToId      String?
+  assignedBy        String?
+  assignmentReason  String?             @db.Text
+  aiSuggestion      Json?
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  patient           Patient?            @relation(fields: [patientId], references: [id])
+  assignedTo        User?               @relation("AssignedTriages", fields: [assignedToId], references: [id])
+  adminAssignedBy   User?               @relation("AdminAssignedTriages", fields: [assignedBy], references: [id])
+  careActions       CareAction[]
+
+  @@index([patientId])
+  @@index([assignedToId])
+  @@index([status])
+  @@index([urgencyLevel])
+}
+
+model CareAction {
+  id               String       @id @default(cuid())
+  triageId         String
+  actionType       String
+  description      String       @db.Text
+  status           ActionStatus @default(PENDING)
+  dueDate          DateTime?
+  completedAt      DateTime?
+  completedById    String?
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+  triage           PatientTriage @relation(fields: [triageId], references: [id], onDelete: Cascade)
+  completedBy      User?        @relation(fields: [completedById], references: [id])
+
+  @@index([triageId])
+  @@index([status])
+  @@index([completedById])
+}
+
+model ProviderAvailability {
+  id          String    @id @default(cuid())
+  providerId  String
+  dayOfWeek   Int       // 0-6, Sunday to Saturday
+  startTime   String    // Format: HH:MM in 24-hour
+  endTime     String    // Format: HH:MM in 24-hour
+  isAvailable Boolean   @default(true)
+  maxPatients Int       @default(10)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  provider    User      @relation(fields: [providerId], references: [id], onDelete: Cascade)
+
+  @@unique([providerId, dayOfWeek, startTime, endTime])
+  @@index([providerId])
+  @@index([dayOfWeek])
+  @@index([isAvailable])
+}
+
+model ProviderSpecialty {
+  id          String   @id @default(cuid())
+  providerId  String
+  specialty   String
+  expertise   String[] // Array of conditions/symptoms the provider has expertise in
+  yearsExp    Int?
+  isCertified Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  provider    User     @relation(fields: [providerId], references: [id], onDelete: Cascade)
+
+  @@index([providerId])
+  @@index([specialty])
+}
+
+// Billing and Insurance - Models for billing and insurance management
+model InsuranceProvider {
+  id                String             @id @default(cuid())
+  name              String
+  contactInfo       String?
+  billingDetails    String?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  patientInsurance  PatientInsurance[]
+}
+
+model PatientInsurance {
+  id                 String             @id @default(cuid())
+  patientId          String
+  insuranceProviderId String
+  policyNumber       String
+  groupNumber        String?
+  coverageStartDate  DateTime           @db.Date
+  coverageEndDate    DateTime?          @db.Date
+  isPrimary          Boolean            @default(false)
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+  patient            Patient            @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  insuranceProvider  InsuranceProvider  @relation(fields: [insuranceProviderId], references: [id])
+
+  @@index([patientId])
+  @@index([insuranceProviderId])
+}
+
+model BillingRecord {
+  id            String        @id @default(cuid())
+  patientId     String
+  providerId    String
+  serviceDate   DateTime      @db.Date
+  serviceCode   String
+  description   String
+  amount        Decimal       @db.Decimal(10, 2)
+  status        BillingStatus @default(PENDING)
+  insuranceId   String?
+  claimNumber   String?
+  submittedAt   DateTime?
+  processedAt   DateTime?
+  notes         String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  patient       Patient       @relation(fields: [patientId], references: [id])
+  provider      User          @relation(fields: [providerId], references: [id])
+
+  @@index([patientId])
+  @@index([providerId])
+  @@index([serviceCode])
+  @@index([status])
+  @@index([submittedAt])
+}

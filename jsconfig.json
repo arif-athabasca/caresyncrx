@@ -1,0 +1,13 @@
+{
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./*"],
+      "@/components/*": ["./src/app/components/*"],
+      "@/auth/*": ["./src/auth/*"],
+      "@/shared/*": ["./src/shared/*"],
+      "@/enums/*": ["./src/enums/*"],
+      "@/lib/*": ["./src/lib/*"]
+    }
+  }
+}

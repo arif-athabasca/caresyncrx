@@ -1,0 +1,256 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 500" width="800" height="500">
+  <!-- Background with gradient for more depth -->
+  <defs>
+    <linearGradient id="bgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#f0f7ff" />
+      <stop offset="100%" stop-color="#e6f3ff" />
+    </linearGradient>
+  </defs>
+  <rect x="0" y="0" width="800" height="500" fill="url(#bgGradient)" />
+  
+  <!-- Grid pattern for modern tech feel -->
+  <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+    <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#e2e8f0" stroke-width="0.5" />
+  </pattern>
+  <rect x="0" y="0" width="800" height="500" fill="url(#grid)" />
+  
+  <!-- Connection lines representing collaboration with pulse animation -->
+  <g stroke="#3b82f6" stroke-width="2.5" opacity="0.7">
+    <!-- Line from center to physician with pulse animation -->
+    <line x1="400" y1="250" x2="300" y2="180">
+      <animate attributeName="stroke-opacity" values="0.4;0.7;0.4" dur="3s" repeatCount="indefinite" />
+    </line>
+    <!-- Line from center to pharmacist -->
+    <line x1="400" y1="250" x2="500" y2="180">
+      <animate attributeName="stroke-opacity" values="0.7;0.4;0.7" dur="3.5s" repeatCount="indefinite" />
+    </line>
+    <!-- Line from center to nurse practitioner -->
+    <line x1="400" y1="250" x2="200" y2="300">
+      <animate attributeName="stroke-opacity" values="0.5;0.8;0.5" dur="2.8s" repeatCount="indefinite" />
+    </line>
+    <!-- Line from center to patient records -->
+    <line x1="400" y1="250" x2="600" y2="300">
+      <animate attributeName="stroke-opacity" values="0.6;0.9;0.6" dur="4s" repeatCount="indefinite" />
+    </line>
+    <!-- Line from center to care plans -->
+    <line x1="400" y1="250" x2="300" y2="370">
+      <animate attributeName="stroke-opacity" values="0.5;0.8;0.5" dur="3.2s" repeatCount="indefinite" />
+    </line>
+    <!-- Line from center to security & compliance -->
+    <line x1="400" y1="250" x2="500" y2="370">
+      <animate attributeName="stroke-opacity" values="0.4;0.7;0.4" dur="3.7s" repeatCount="indefinite" />
+    </line>
+  </g>
+
+  <!-- Enhanced smooth glow effect for the central hub -->
+  <defs>
+    <filter id="glow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="5" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+  </defs>
+  
+  <!-- Central hub - representing the CareSyncRx platform with glow -->
+  <g filter="url(#glow)">
+    <!-- Layered circles for depth -->
+    <circle cx="400" cy="250" r="65" fill="#ebf5ff" stroke="#3b82f6" stroke-width="1.5" />
+    <circle cx="400" cy="250" r="55" fill="#ffffff" stroke="#3b82f6" stroke-width="2" />
+    
+    <!-- CareSyncRx logo effect -->
+    <g transform="translate(400, 250)">
+      <circle cx="0" cy="0" r="40" fill="#ffffff" stroke="#3b82f6" stroke-width="2" />
+      <!-- Animated ring around central hub -->
+      <circle cx="0" cy="0" r="45" fill="none" stroke="#3b82f6" stroke-width="1.5" stroke-dasharray="10 5">
+        <animateTransform 
+          attributeName="transform" 
+          type="rotate" 
+          from="0" 
+          to="360" 
+          dur="30s" 
+          repeatCount="indefinite" />
+      </circle>
+    </g>
+    
+    <!-- Text in central hub -->
+    <text x="400" y="240" font-family="Arial, sans-serif" font-size="16" fill="#3b82f6" text-anchor="middle" font-weight="bold">CareSyncRx</text>
+    <text x="400" y="265" font-family="Arial, sans-serif" font-size="12" fill="#3b82f6" text-anchor="middle">Coordination Hub</text>
+    
+    <!-- Subtle icon in center -->
+    <path d="M385,235 L415,235 L415,245 L405,245 L405,260 L395,260 L395,245 L385,245 Z" fill="#ebf5ff" stroke="#3b82f6" stroke-width="1" transform="rotate(-45, 400, 250)" />
+  </g>
+  
+  <!-- Doctor figure - enhanced -->
+  <g transform="translate(300, 180)">
+    <circle cx="0" cy="0" r="40" fill="#ffffff" stroke="#2a4394" stroke-width="2.5" />
+    <!-- Badge-like highlight for professional -->
+    <path d="M-35,-10 L-25,-10 L-22,-5 L-25,0 L-35,0 L-38,-5 Z" fill="#d1e0ff" stroke="#2a4394" stroke-width="1" />
+    <text x="0" y="5" font-family="Arial, sans-serif" font-size="12" fill="#2a4394" text-anchor="middle" font-weight="bold">Physician</text>
+    <!-- Medical professional icon -->
+    <path d="M-12,-15 L-5,-15 L-5,-22 L5,-22 L5,-15 L12,-15 L12,-5 L5,-5 L5,2 L-5,2 L-5,-5 L-12,-5 Z" fill="#2a4394" />
+    <circle cx="0" cy="-30" r="10" fill="#d1e0ff" stroke="#2a4394" stroke-width="1.5" />
+    <!-- Stethoscope detail -->
+    <path d="M-8,-5 C-15,5 -5,15 5,5" fill="none" stroke="#2a4394" stroke-width="1.5" stroke-linecap="round" />
+  </g>
+  
+  <!-- Pharmacist figure - enhanced -->
+  <g transform="translate(500, 180)">
+    <circle cx="0" cy="0" r="40" fill="#ffffff" stroke="#14b4bf" stroke-width="2.5" />
+    <text x="0" y="5" font-family="Arial, sans-serif" font-size="12" fill="#14b4bf" text-anchor="middle" font-weight="bold">Pharmacist</text>
+    <!-- Pharmacy symbol -->
+    <path d="M-10,-25 L10,-25 L15,-5 L-15,-5 Z" fill="#14b4bf" />
+    <rect x="-5" y="-5" width="10" height="20" fill="#14b4bf" />
+    <!-- Pill/medicine icons -->
+    <ellipse cx="-15" cy="-15" rx="5" ry="3" fill="#d1fcff" stroke="#14b4bf" stroke-width="1" transform="rotate(45, -15, -15)" />
+    <ellipse cx="15" cy="-15" rx="5" ry="3" fill="#d1fcff" stroke="#14b4bf" stroke-width="1" transform="rotate(-45, 15, -15)" />
+  </g>
+  
+  <!-- Nurse practitioner - enhanced -->
+  <g transform="translate(200, 300)">
+    <circle cx="0" cy="0" r="40" fill="#ffffff" stroke="#16a34a" stroke-width="2.5" />
+    <text x="0" y="5" font-family="Arial, sans-serif" font-size="12" fill="#16a34a" text-anchor="middle" font-weight="bold">Nurse</text>
+    <text x="0" y="20" font-family="Arial, sans-serif" font-size="12" fill="#16a34a" text-anchor="middle" font-weight="bold">Practitioner</text>
+    <!-- Nursing symbol with medical cross -->
+    <path d="M-15,-20 L15,-20 L15,-10 L5,-10 L5,10 L-5,10 L-5,-10 L-15,-10 Z" fill="#16a34a" />
+    <path d="M-8,-17 L8,-17 L8,-13 L-8,-13 Z" fill="#d1ffea" />
+    <!-- Medical chart detail -->
+    <path d="M-20,15 L-15,15 L-15,10 L-10,10 L-10,15 L-5,15" fill="none" stroke="#16a34a" stroke-width="1.5" stroke-linecap="round" />
+  </g>
+  
+  <!-- Patient records - enhanced -->
+  <g transform="translate(600, 300)">
+    <circle cx="0" cy="0" r="40" fill="#ffffff" stroke="#dc2626" stroke-width="2.5" />
+    <text x="0" y="5" font-family="Arial, sans-serif" font-size="12" fill="#dc2626" text-anchor="middle" font-weight="bold">Patient</text>
+    <text x="0" y="20" font-family="Arial, sans-serif" font-size="12" fill="#dc2626" text-anchor="middle" font-weight="bold">Records</text>
+    <g transform="translate(-15, -20)">
+      <!-- Chart details with animated highlights -->
+      <rect width="30" height="35" fill="#ffeded" stroke="#dc2626" stroke-width="1.5" rx="2" />
+      <line x1="5" y1="7" x2="25" y2="7" stroke="#dc2626" stroke-width="1.5" />
+      <line x1="5" y1="14" x2="25" y2="14" stroke="#dc2626" stroke-width="1.5" />
+      <line x1="5" y1="21" x2="25" y2="21" stroke="#dc2626" stroke-width="1.5" />
+      <line x1="5" y1="28" x2="25" y2="28" stroke="#dc2626" stroke-width="1.5" />
+      <!-- Pulse animation on one line -->
+      <line x1="5" y1="21" x2="25" y2="21" stroke="#ff0000" stroke-width="1.5" opacity="0.5">
+        <animate attributeName="opacity" values="0;0.8;0" dur="2s" repeatCount="indefinite" />
+      </line>
+    </g>
+  </g>
+  
+  <!-- Care Plan - enhanced -->
+  <g transform="translate(300, 370)">
+    <circle cx="0" cy="0" r="40" fill="#ffffff" stroke="#ea580c" stroke-width="2.5" />
+    <text x="0" y="5" font-family="Arial, sans-serif" font-size="12" fill="#ea580c" text-anchor="middle" font-weight="bold">Care</text>
+    <text x="0" y="20" font-family="Arial, sans-serif" font-size="12" fill="#ea580c" text-anchor="middle" font-weight="bold">Plans</text>
+    <g transform="translate(-15, -15)">
+      <!-- Enhanced calendar/schedule look -->
+      <rect width="30" height="30" fill="#fff5eb" stroke="#ea580c" stroke-width="1.5" rx="2" />
+      <line x1="0" y1="10" x2="30" y2="10" stroke="#ea580c" stroke-width="1.5" />
+      <line x1="0" y1="20" x2="30" y2="20" stroke="#ea580c" stroke-width="1.5" />
+      <line x1="10" y1="0" x2="10" y2="30" stroke="#ea580c" stroke-width="1.5" />
+      <line x1="20" y1="0" x2="20" y2="30" stroke="#ea580c" stroke-width="1.5" />
+      <!-- Task completed checkmarks -->
+      <path d="M3,5 L5,7 L8,3" stroke="#ea580c" stroke-width="1" fill="none" />
+      <path d="M13,5 L15,7 L18,3" stroke="#ea580c" stroke-width="1" fill="none" />
+    </g>
+  </g>
+  
+  <!-- Security & Compliance - enhanced with PIPEDA focus -->
+  <g transform="translate(500, 370)">
+    <circle cx="0" cy="0" r="40" fill="#ffffff" stroke="#6b21a8" stroke-width="2.5" />
+    <text x="0" y="-5" font-family="Arial, sans-serif" font-size="12" fill="#6b21a8" text-anchor="middle" font-weight="bold">PIPEDA</text>
+    <text x="0" y="10" font-family="Arial, sans-serif" font-size="12" fill="#6b21a8" text-anchor="middle" font-weight="bold">Compliant</text>
+    <text x="0" y="25" font-family="Arial, sans-serif" font-size="10" fill="#6b21a8" text-anchor="middle">Security</text>
+    <!-- Enhanced security shield -->
+    <path d="M0,-25 L15,-10 L0,5 L-15,-10 Z" fill="#f3e8ff" stroke="#6b21a8" stroke-width="1.5" />
+    <!-- Lock icon inside -->
+    <circle cx="0" cy="-10" r="5" fill="#6b21a8" />
+    <rect x="-2" y="-14" width="4" height="6" rx="1" fill="#f3e8ff" />
+    <path d="M-2,-14 C-2,-16 0,-18 0,-18 C0,-18 2,-16 2,-14" fill="none" stroke="#f3e8ff" stroke-width="1" />
+  </g>
+  
+  <!-- PIPEDA Shield with Canada logo -->
+  <g transform="translate(680, 50)">
+    <path d="M-20,0 C-20,-30 0,-40 0,-40 C0,-40 20,-30 20,0 C20,20 0,40 0,40 C0,40 -20,20 -20,0 Z" fill="#ffffff" stroke="#3b82f6" stroke-width="2" />
+    <text x="0" y="5" font-family="Arial, sans-serif" font-size="10" fill="#3b82f6" text-anchor="middle" font-weight="bold">PIPEDA</text>
+    <!-- Canadian maple leaf (simplified) -->
+    <path d="M-5,-10 L-2,-10 L0,-5 L2,-10 L5,-10 L3,-15 L5,-20 L0,-17.5 L-5,-20 L-3,-15 Z" fill="#ff0000" />
+    <!-- Pulse animation around shield -->
+    <path d="M-20,0 C-20,-30 0,-40 0,-40 C0,-40 20,-30 20,0 C20,20 0,40 0,40 C0,40 -20,20 -20,0 Z" fill="none" stroke="#3b82f6" stroke-width="0.5" opacity="0.7">
+      <animate attributeName="stroke-width" values="0.5;2;0.5" dur="3s" repeatCount="indefinite" />
+      <animate attributeName="opacity" values="0.3;0.7;0.3" dur="3s" repeatCount="indefinite" />
+    </path>
+  </g>
+  
+  <!-- Data flow visualization with improved animations -->
+  <g>
+    <!-- From center to physician -->
+    <circle cx="350" cy="215" r="3" fill="#3b82f6">
+      <animate attributeName="cx" values="400;300" dur="3s" repeatCount="indefinite" />
+      <animate attributeName="cy" values="250;180" dur="3s" repeatCount="indefinite" />
+      <animate attributeName="opacity" values="1;0.3;1" dur="3s" repeatCount="indefinite" />
+    </circle>
+    
+    <!-- From physician to center -->
+    <circle cx="350" cy="215" r="3" fill="#2a4394">
+      <animate attributeName="cx" values="300;400" dur="3.5s" repeatCount="indefinite" />
+      <animate attributeName="cy" values="180;250" dur="3.5s" repeatCount="indefinite" />
+      <animate attributeName="opacity" values="1;0.4;1" dur="3.5s" repeatCount="indefinite" />
+    </circle>
+    
+    <!-- From center to pharmacist -->
+    <circle cx="450" cy="215" r="3" fill="#3b82f6">
+      <animate attributeName="cx" values="400;500" dur="2.5s" repeatCount="indefinite" />
+      <animate attributeName="cy" values="250;180" dur="2.5s" repeatCount="indefinite" />
+      <animate attributeName="opacity" values="1;0.3;1" dur="2.5s" repeatCount="indefinite" />
+    </circle>
+    
+    <!-- From pharmacist to center -->
+    <circle cx="450" cy="215" r="3" fill="#14b4bf">
+      <animate attributeName="cx" values="500;400" dur="4s" repeatCount="indefinite" />
+      <animate attributeName="cy" values="180;250" dur="4s" repeatCount="indefinite" />
+      <animate attributeName="opacity" values="1;0.4;1" dur="4s" repeatCount="indefinite" />
+    </circle>
+    
+    <!-- From center to nurse -->
+    <circle cx="300" cy="275" r="3" fill="#3b82f6">
+      <animate attributeName="cx" values="400;200" dur="3.2s" repeatCount="indefinite" />
+      <animate attributeName="cy" values="250;300" dur="3.2s" repeatCount="indefinite" />
+      <animate attributeName="opacity" values="1;0.3;1" dur="3.2s" repeatCount="indefinite" />
+    </circle>
+    
+    <!-- From nurse to center -->
+    <circle cx="300" cy="275" r="3" fill="#16a34a">
+      <animate attributeName="cx" values="200;400" dur="3.7s" repeatCount="indefinite" />
+      <animate attributeName="cy" values="300;250" dur="3.7s" repeatCount="indefinite" />
+      <animate attributeName="opacity" values="1;0.4;1" dur="3.7s" repeatCount="indefinite" />
+    </circle>
+    
+    <!-- From center to patient records -->
+    <circle cx="500" cy="275" r="3" fill="#3b82f6">
+      <animate attributeName="cx" values="400;600" dur="2.8s" repeatCount="indefinite" />
+      <animate attributeName="cy" values="250;300" dur="2.8s" repeatCount="indefinite" />
+      <animate attributeName="opacity" values="1;0.3;1" dur="2.8s" repeatCount="indefinite" />
+    </circle>
+    
+    <!-- From patient records to center -->
+    <circle cx="500" cy="275" r="3" fill="#dc2626">
+      <animate attributeName="cx" values="600;400" dur="3.3s" repeatCount="indefinite" />
+      <animate attributeName="cy" values="300;250" dur="3.3s" repeatCount="indefinite" />
+      <animate attributeName="opacity" values="1;0.4;1" dur="3.3s" repeatCount="indefinite" />
+    </circle>
+  </g>
+  
+  <!-- Multi-disciplinary teams text -->
+  <g transform="translate(400, 110)">
+    <text x="0" y="0" font-family="Arial, sans-serif" font-size="14" fill="#1e40af" text-anchor="middle" font-style="italic">Multidisciplinary Team Collaboration</text>
+    <line x1="-150" y1="10" x2="150" y2="10" stroke="#3b82f6" stroke-width="1" stroke-dasharray="1 2" />
+  </g>
+  
+  <!-- Caption text at the bottom -->
+  <text x="400" y="460" font-family="Arial, sans-serif" font-size="12" fill="#3b82f6" text-anchor="middle">Seamless, PIPEDA-compliant care coordination for healthcare teams</text>
+  
+  <!-- Main title with glow -->
+  <g filter="url(#glow)">
+    <text x="400" y="50" font-family="Arial, sans-serif" font-size="24" fill="#1e40af" text-anchor="middle" font-weight="bold">Coordinating Care, Empowering Teams</text>
+  </g>
+</svg>

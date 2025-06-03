@@ -1,0 +1,557 @@
+{
+  "period": {
+    "start": "2025-04-22T17:36:46.264Z",
+    "end": "2025-05-22T17:36:46.264Z"
+  },
+  "summary": {
+    "totalEvents": 17,
+    "criticalEventsCount": 2,
+    "warningEventsCount": 7,
+    "infoEventsCount": 8
+  },
+  "eventsByType": {
+    "LOGIN_SUCCESS": [
+      {
+        "id": "acc8707a-16e2-4921-a958-6c4c57f2e677",
+        "timestamp": "2025-05-22T15:28:33.950Z",
+        "eventType": "LOGIN_SUCCESS",
+        "severity": "INFO",
+        "userId": "user_c6s96vkt",
+        "username": "test@example.com",
+        "ipAddress": "192.168.1.1",
+        "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/96.0.4664.110",
+        "path": "/api/auth/login",
+        "method": "POST",
+        "description": "User logged in successfully",
+        "metadata": null
+      },
+      {
+        "id": "bc94bf19-7e2f-40e1-9712-91eee6222620",
+        "timestamp": "2025-05-22T17:36:28.667Z",
+        "eventType": "LOGIN_SUCCESS",
+        "severity": "INFO",
+        "userId": "test-user-001",
+        "username": "test@example.com",
+        "ipAddress": "127.0.0.1",
+        "userAgent": "Mozilla/5.0 Test Browser",
+        "path": null,
+        "method": null,
+        "description": "Test user logged in successfully",
+        "metadata": "{\"source\":\"Security test script\",\"deviceId\":\"TEST-DEVICE-001\"}"
+      }
+    ],
+    "LOGIN_FAILURE": [
+      {
+        "id": "6e781c79-0ae5-428c-ae10-04f341f90210",
+        "timestamp": "2025-05-22T15:28:34.030Z",
+        "eventType": "LOGIN_FAILURE",
+        "severity": "WARNING",
+        "userId": "user_11rksrso",
+        "username": "suspicious@example.com",
+        "ipAddress": "192.168.1.1",
+        "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/96.0.4664.110",
+        "path": "/api/auth/login",
+        "method": "POST",
+        "description": "Failed login attempt with incorrect password",
+        "metadata": null
+      },
+      {
+        "id": "0f56703e-da37-485b-b2aa-a136bc3d94a2",
+        "timestamp": "2025-05-22T17:36:28.670Z",
+        "eventType": "LOGIN_FAILURE",
+        "severity": "WARNING",
+        "userId": null,
+        "username": "test@example.com",
+        "ipAddress": "127.0.0.1",
+        "userAgent": "Mozilla/5.0 Test Browser",
+        "path": null,
+        "method": null,
+        "description": "Failed login attempt for test@example.com: Invalid credentials",
+        "metadata": "{\"source\":\"Security test script\",\"reason\":\"Testing security logging\"}"
+      }
+    ],
+    "ACCESS_DENIED": [
+      {
+        "id": "983e2f28-7672-45aa-9cd6-56c3b4c7d444",
+        "timestamp": "2025-05-22T15:28:34.044Z",
+        "eventType": "ACCESS_DENIED",
+        "severity": "WARNING",
+        "userId": "user_dyllwkc5",
+        "username": "test@example.com",
+        "ipAddress": "192.168.1.1",
+        "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/96.0.4664.110",
+        "path": "/api/admin/settings",
+        "method": "GET",
+        "description": "Access denied to admin resource",
+        "metadata": null
+      }
+    ],
+    "RATE_LIMIT_EXCEEDED": [
+      {
+        "id": "fb64caa2-72d0-470a-aa69-1bb441d12535",
+        "timestamp": "2025-05-22T15:28:34.058Z",
+        "eventType": "RATE_LIMIT_EXCEEDED",
+        "severity": "WARNING",
+        "userId": "user_ocd8kh41",
+        "username": "test@example.com",
+        "ipAddress": "203.0.113.195",
+        "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/96.0.4664.110",
+        "path": "/api/patients",
+        "method": "GET",
+        "description": "Rate limit exceeded for API endpoint",
+        "metadata": null
+      }
+    ],
+    "SENSITIVE_DATA_ACCESS": [
+      {
+        "id": "64188267-102e-4d09-9bcc-859349c81852",
+        "timestamp": "2025-05-22T15:28:34.077Z",
+        "eventType": "SENSITIVE_DATA_ACCESS",
+        "severity": "INFO",
+        "userId": "user_1th1uufp",
+        "username": "test@example.com",
+        "ipAddress": "192.168.1.1",
+        "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/96.0.4664.110",
+        "path": "/api/patients/PHI12345",
+        "method": "GET",
+        "description": "PHI data accessed for patient record",
+        "metadata": null
+      }
+    ],
+    "TWO_FACTOR_SETUP": [
+      {
+        "id": "ae9f1865-3702-468f-a87d-59f735bd81a2",
+        "timestamp": "2025-05-22T15:28:34.081Z",
+        "eventType": "TWO_FACTOR_SETUP",
+        "severity": "INFO",
+        "userId": "user_3y4wpo5q",
+        "username": "test@example.com",
+        "ipAddress": "192.168.1.1",
+        "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/96.0.4664.110",
+        "path": "/api/auth/2fa/setup",
+        "method": "POST",
+        "description": "Two-factor authentication set up by user",
+        "metadata": null
+      },
+      {
+        "id": "5bbcbf59-0c78-402a-978f-7d6d0d0df952",
+        "timestamp": "2025-05-22T17:36:28.675Z",
+        "eventType": "TWO_FACTOR_SETUP",
+        "severity": "INFO",
+        "userId": "test-user-001",
+        "username": "test@example.com",
+        "ipAddress": "127.0.0.1",
+        "userAgent": "Mozilla/5.0 Test Browser",
+        "path": null,
+        "method": null,
+        "description": "Two-factor authentication setup for user test@example.com (method: TOTP)",
+        "metadata": "{\"source\":\"Security test script\",\"method\":\"TOTP\"}"
+      }
+    ],
+    "TWO_FACTOR_FAILURE": [
+      {
+        "id": "244feaff-7bd1-43a6-b8cf-945471a886e6",
+        "timestamp": "2025-05-22T15:28:34.097Z",
+        "eventType": "TWO_FACTOR_FAILURE",
+        "severity": "WARNING",
+        "userId": "user_c0udr5xh",
+        "username": "test@example.com",
+        "ipAddress": "192.168.1.1",
+        "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/96.0.4664.110",
+        "path": "/api/auth/2fa/verify",
+        "method": "POST",
+        "description": "Failed two-factor authentication attempt",
+        "metadata": null
+      },
+      {
+        "id": "5c891d58-7081-4a73-9ffb-c70b93bcd613",
+        "timestamp": "2025-05-22T17:36:28.683Z",
+        "eventType": "TWO_FACTOR_FAILURE",
+        "severity": "WARNING",
+        "userId": "test-user-001",
+        "username": "test@example.com",
+        "ipAddress": "127.0.0.1",
+        "userAgent": "Mozilla/5.0 Test Browser",
+        "path": null,
+        "method": null,
+        "description": "Two-factor authentication failed for user test@example.com (method: TOTP): Invalid code",
+        "metadata": "{\"source\":\"Security test script\",\"method\":\"TOTP\",\"reason\":\"Invalid code\"}"
+      }
+    ],
+    "SYSTEM_SETTING_CHANGE": [
+      {
+        "id": "8286174c-5dcd-46c6-bf77-e33dc56fb8e8",
+        "timestamp": "2025-05-22T15:28:34.110Z",
+        "eventType": "SYSTEM_SETTING_CHANGE",
+        "severity": "CRITICAL",
+        "userId": "user_jn04ecnr",
+        "username": "test@example.com",
+        "ipAddress": "192.168.1.1",
+        "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/96.0.4664.110",
+        "path": "/api/admin/security-policy",
+        "method": "PUT",
+        "description": "Security policy updated by administrator",
+        "metadata": null
+      },
+      {
+        "id": "67c29566-adf3-4881-a8a0-a6d5441e721f",
+        "timestamp": "2025-05-22T17:36:28.646Z",
+        "eventType": "SYSTEM_SETTING_CHANGE",
+        "severity": "INFO",
+        "userId": "test-user-001",
+        "username": "test@example.com",
+        "ipAddress": "127.0.0.1",
+        "userAgent": null,
+        "path": null,
+        "method": null,
+        "description": "Security logging test - direct log",
+        "metadata": "{\"test\":\"Security Audit Test\"}"
+      }
+    ],
+    "IP_BLOCKED": [
+      {
+        "id": "77d04f20-af5e-4f5e-990b-f49ffedd47d0",
+        "timestamp": "2025-05-22T15:28:34.117Z",
+        "eventType": "IP_BLOCKED",
+        "severity": "CRITICAL",
+        "userId": "user_pzhwx9bh",
+        "username": "test@example.com",
+        "ipAddress": "198.51.100.76",
+        "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/96.0.4664.110",
+        "path": "/api/auth/login",
+        "method": "POST",
+        "description": "IP address blocked due to suspicious activity",
+        "metadata": null
+      }
+    ],
+    "TWO_FACTOR_SUCCESS": [
+      {
+        "id": "d835ddcd-41e6-4535-b95b-2b43819303fe",
+        "timestamp": "2025-05-22T17:36:28.677Z",
+        "eventType": "TWO_FACTOR_SUCCESS",
+        "severity": "INFO",
+        "userId": "test-user-001",
+        "username": "test@example.com",
+        "ipAddress": "127.0.0.1",
+        "userAgent": "Mozilla/5.0 Test Browser",
+        "path": null,
+        "method": null,
+        "description": "Two-factor authentication successful for user test@example.com (method: TOTP)",
+        "metadata": "{\"source\":\"Security test script\",\"method\":\"TOTP\"}"
+      }
+    ],
+    "PASSWORD_RESET": [
+      {
+        "id": "c4249a4c-4e47-4435-b632-5f202d07b4a0",
+        "timestamp": "2025-05-22T17:36:28.688Z",
+        "eventType": "PASSWORD_RESET",
+        "severity": "INFO",
+        "userId": null,
+        "username": "test@example.com",
+        "ipAddress": "127.0.0.1",
+        "userAgent": "Mozilla/5.0 Test Browser",
+        "path": null,
+        "method": null,
+        "description": "Password reset requested for test@example.com",
+        "metadata": "{\"source\":\"Security test script\"}"
+      }
+    ],
+    "SECURITY_POLICY_CHANGE": [
+      {
+        "id": "e43a8772-e636-4026-9ae9-95b1d1f5150b",
+        "timestamp": "2025-05-22T17:36:28.692Z",
+        "eventType": "SECURITY_POLICY_CHANGE",
+        "severity": "WARNING",
+        "userId": "test-user-001",
+        "username": "test@example.com",
+        "ipAddress": "127.0.0.1",
+        "userAgent": "Mozilla/5.0 Test Browser",
+        "path": null,
+        "method": null,
+        "description": "Testing generic security event logging",
+        "metadata": "{\"source\":\"Security test script\",\"action\":\"SECURITY_TEST\"}"
+      }
+    ]
+  },
+  "eventsBySeverity": {
+    "INFO": [
+      {
+        "id": "acc8707a-16e2-4921-a958-6c4c57f2e677",
+        "timestamp": "2025-05-22T15:28:33.950Z",
+        "eventType": "LOGIN_SUCCESS",
+        "severity": "INFO",
+        "userId": "user_c6s96vkt",
+        "username": "test@example.com",
+        "ipAddress": "192.168.1.1",
+        "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/96.0.4664.110",
+        "path": "/api/auth/login",
+        "method": "POST",
+        "description": "User logged in successfully",
+        "metadata": null
+      },
+      {
+        "id": "64188267-102e-4d09-9bcc-859349c81852",
+        "timestamp": "2025-05-22T15:28:34.077Z",
+        "eventType": "SENSITIVE_DATA_ACCESS",
+        "severity": "INFO",
+        "userId": "user_1th1uufp",
+        "username": "test@example.com",
+        "ipAddress": "192.168.1.1",
+        "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/96.0.4664.110",
+        "path": "/api/patients/PHI12345",
+        "method": "GET",
+        "description": "PHI data accessed for patient record",
+        "metadata": null
+      },
+      {
+        "id": "ae9f1865-3702-468f-a87d-59f735bd81a2",
+        "timestamp": "2025-05-22T15:28:34.081Z",
+        "eventType": "TWO_FACTOR_SETUP",
+        "severity": "INFO",
+        "userId": "user_3y4wpo5q",
+        "username": "test@example.com",
+        "ipAddress": "192.168.1.1",
+        "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/96.0.4664.110",
+        "path": "/api/auth/2fa/setup",
+        "method": "POST",
+        "description": "Two-factor authentication set up by user",
+        "metadata": null
+      },
+      {
+        "id": "67c29566-adf3-4881-a8a0-a6d5441e721f",
+        "timestamp": "2025-05-22T17:36:28.646Z",
+        "eventType": "SYSTEM_SETTING_CHANGE",
+        "severity": "INFO",
+        "userId": "test-user-001",
+        "username": "test@example.com",
+        "ipAddress": "127.0.0.1",
+        "userAgent": null,
+        "path": null,
+        "method": null,
+        "description": "Security logging test - direct log",
+        "metadata": "{\"test\":\"Security Audit Test\"}"
+      },
+      {
+        "id": "bc94bf19-7e2f-40e1-9712-91eee6222620",
+        "timestamp": "2025-05-22T17:36:28.667Z",
+        "eventType": "LOGIN_SUCCESS",
+        "severity": "INFO",
+        "userId": "test-user-001",
+        "username": "test@example.com",
+        "ipAddress": "127.0.0.1",
+        "userAgent": "Mozilla/5.0 Test Browser",
+        "path": null,
+        "method": null,
+        "description": "Test user logged in successfully",
+        "metadata": "{\"source\":\"Security test script\",\"deviceId\":\"TEST-DEVICE-001\"}"
+      },
+      {
+        "id": "5bbcbf59-0c78-402a-978f-7d6d0d0df952",
+        "timestamp": "2025-05-22T17:36:28.675Z",
+        "eventType": "TWO_FACTOR_SETUP",
+        "severity": "INFO",
+        "userId": "test-user-001",
+        "username": "test@example.com",
+        "ipAddress": "127.0.0.1",
+        "userAgent": "Mozilla/5.0 Test Browser",
+        "path": null,
+        "method": null,
+        "description": "Two-factor authentication setup for user test@example.com (method: TOTP)",
+        "metadata": "{\"source\":\"Security test script\",\"method\":\"TOTP\"}"
+      },
+      {
+        "id": "d835ddcd-41e6-4535-b95b-2b43819303fe",
+        "timestamp": "2025-05-22T17:36:28.677Z",
+        "eventType": "TWO_FACTOR_SUCCESS",
+        "severity": "INFO",
+        "userId": "test-user-001",
+        "username": "test@example.com",
+        "ipAddress": "127.0.0.1",
+        "userAgent": "Mozilla/5.0 Test Browser",
+        "path": null,
+        "method": null,
+        "description": "Two-factor authentication successful for user test@example.com (method: TOTP)",
+        "metadata": "{\"source\":\"Security test script\",\"method\":\"TOTP\"}"
+      },
+      {
+        "id": "c4249a4c-4e47-4435-b632-5f202d07b4a0",
+        "timestamp": "2025-05-22T17:36:28.688Z",
+        "eventType": "PASSWORD_RESET",
+        "severity": "INFO",
+        "userId": null,
+        "username": "test@example.com",
+        "ipAddress": "127.0.0.1",
+        "userAgent": "Mozilla/5.0 Test Browser",
+        "path": null,
+        "method": null,
+        "description": "Password reset requested for test@example.com",
+        "metadata": "{\"source\":\"Security test script\"}"
+      }
+    ],
+    "WARNING": [
+      {
+        "id": "6e781c79-0ae5-428c-ae10-04f341f90210",
+        "timestamp": "2025-05-22T15:28:34.030Z",
+        "eventType": "LOGIN_FAILURE",
+        "severity": "WARNING",
+        "userId": "user_11rksrso",
+        "username": "suspicious@example.com",
+        "ipAddress": "192.168.1.1",
+        "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/96.0.4664.110",
+        "path": "/api/auth/login",
+        "method": "POST",
+        "description": "Failed login attempt with incorrect password",
+        "metadata": null
+      },
+      {
+        "id": "983e2f28-7672-45aa-9cd6-56c3b4c7d444",
+        "timestamp": "2025-05-22T15:28:34.044Z",
+        "eventType": "ACCESS_DENIED",
+        "severity": "WARNING",
+        "userId": "user_dyllwkc5",
+        "username": "test@example.com",
+        "ipAddress": "192.168.1.1",
+        "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/96.0.4664.110",
+        "path": "/api/admin/settings",
+        "method": "GET",
+        "description": "Access denied to admin resource",
+        "metadata": null
+      },
+      {
+        "id": "fb64caa2-72d0-470a-aa69-1bb441d12535",
+        "timestamp": "2025-05-22T15:28:34.058Z",
+        "eventType": "RATE_LIMIT_EXCEEDED",
+        "severity": "WARNING",
+        "userId": "user_ocd8kh41",
+        "username": "test@example.com",
+        "ipAddress": "203.0.113.195",
+        "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/96.0.4664.110",
+        "path": "/api/patients",
+        "method": "GET",
+        "description": "Rate limit exceeded for API endpoint",
+        "metadata": null
+      },
+      {
+        "id": "244feaff-7bd1-43a6-b8cf-945471a886e6",
+        "timestamp": "2025-05-22T15:28:34.097Z",
+        "eventType": "TWO_FACTOR_FAILURE",
+        "severity": "WARNING",
+        "userId": "user_c0udr5xh",
+        "username": "test@example.com",
+        "ipAddress": "192.168.1.1",
+        "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/96.0.4664.110",
+        "path": "/api/auth/2fa/verify",
+        "method": "POST",
+        "description": "Failed two-factor authentication attempt",
+        "metadata": null
+      },
+      {
+        "id": "0f56703e-da37-485b-b2aa-a136bc3d94a2",
+        "timestamp": "2025-05-22T17:36:28.670Z",
+        "eventType": "LOGIN_FAILURE",
+        "severity": "WARNING",
+        "userId": null,
+        "username": "test@example.com",
+        "ipAddress": "127.0.0.1",
+        "userAgent": "Mozilla/5.0 Test Browser",
+        "path": null,
+        "method": null,
+        "description": "Failed login attempt for test@example.com: Invalid credentials",
+        "metadata": "{\"source\":\"Security test script\",\"reason\":\"Testing security logging\"}"
+      },
+      {
+        "id": "5c891d58-7081-4a73-9ffb-c70b93bcd613",
+        "timestamp": "2025-05-22T17:36:28.683Z",
+        "eventType": "TWO_FACTOR_FAILURE",
+        "severity": "WARNING",
+        "userId": "test-user-001",
+        "username": "test@example.com",
+        "ipAddress": "127.0.0.1",
+        "userAgent": "Mozilla/5.0 Test Browser",
+        "path": null,
+        "method": null,
+        "description": "Two-factor authentication failed for user test@example.com (method: TOTP): Invalid code",
+        "metadata": "{\"source\":\"Security test script\",\"method\":\"TOTP\",\"reason\":\"Invalid code\"}"
+      },
+      {
+        "id": "e43a8772-e636-4026-9ae9-95b1d1f5150b",
+        "timestamp": "2025-05-22T17:36:28.692Z",
+        "eventType": "SECURITY_POLICY_CHANGE",
+        "severity": "WARNING",
+        "userId": "test-user-001",
+        "username": "test@example.com",
+        "ipAddress": "127.0.0.1",
+        "userAgent": "Mozilla/5.0 Test Browser",
+        "path": null,
+        "method": null,
+        "description": "Testing generic security event logging",
+        "metadata": "{\"source\":\"Security test script\",\"action\":\"SECURITY_TEST\"}"
+      }
+    ],
+    "CRITICAL": [
+      {
+        "id": "8286174c-5dcd-46c6-bf77-e33dc56fb8e8",
+        "timestamp": "2025-05-22T15:28:34.110Z",
+        "eventType": "SYSTEM_SETTING_CHANGE",
+        "severity": "CRITICAL",
+        "userId": "user_jn04ecnr",
+        "username": "test@example.com",
+        "ipAddress": "192.168.1.1",
+        "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/96.0.4664.110",
+        "path": "/api/admin/security-policy",
+        "method": "PUT",
+        "description": "Security policy updated by administrator",
+        "metadata": null
+      },
+      {
+        "id": "77d04f20-af5e-4f5e-990b-f49ffedd47d0",
+        "timestamp": "2025-05-22T15:28:34.117Z",
+        "eventType": "IP_BLOCKED",
+        "severity": "CRITICAL",
+        "userId": "user_pzhwx9bh",
+        "username": "test@example.com",
+        "ipAddress": "198.51.100.76",
+        "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/96.0.4664.110",
+        "path": "/api/auth/login",
+        "method": "POST",
+        "description": "IP address blocked due to suspicious activity",
+        "metadata": null
+      }
+    ]
+  },
+  "criticalEvents": [
+    {
+      "id": "8286174c-5dcd-46c6-bf77-e33dc56fb8e8",
+      "timestamp": "2025-05-22T15:28:34.110Z",
+      "eventType": "SYSTEM_SETTING_CHANGE",
+      "severity": "CRITICAL",
+      "userId": "user_jn04ecnr",
+      "username": "test@example.com",
+      "ipAddress": "192.168.1.1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/96.0.4664.110",
+      "path": "/api/admin/security-policy",
+      "method": "PUT",
+      "description": "Security policy updated by administrator",
+      "metadata": null
+    },
+    {
+      "id": "77d04f20-af5e-4f5e-990b-f49ffedd47d0",
+      "timestamp": "2025-05-22T15:28:34.117Z",
+      "eventType": "IP_BLOCKED",
+      "severity": "CRITICAL",
+      "userId": "user_pzhwx9bh",
+      "username": "test@example.com",
+      "ipAddress": "198.51.100.76",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/96.0.4664.110",
+      "path": "/api/auth/login",
+      "method": "POST",
+      "description": "IP address blocked due to suspicious activity",
+      "metadata": null
+    }
+  ],
+  "suspiciousIPs": [],
+  "suspiciousUsers": [],
+  "recommendations": [
+    "Review all critical security events immediately"
+  ]
+}

@@ -1,5 +1,12 @@
+/**
+ * PostCSS configuration for CareSyncRx
+ * Includes autoprefixer and Tailwind CSS
+ */
 const config = {
-  plugins: ["@tailwindcss/postcss"],
+  plugins: {
+    tailwindcss: {},
+    autoprefixer: {},
+  },
 };
 
 export default config;
