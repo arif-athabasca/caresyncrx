@@ -13,6 +13,8 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import AuthDebugLogger from '../AuthDebugLogger';
+import AuthDebugger from '../AuthDebugger';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -30,9 +32,11 @@ export default function ClinicalLayout({ children }: LayoutProps) {
     { name: 'Reports', href: '/reports' },
     { name: 'Settings', href: '/settings' },
   ];
-  
-  return (
-    <>
+    return (    <>
+      {/* Debug components for authentication issues */}
+      <AuthDebugLogger />
+      <AuthDebugger visible={false} />
+      
       {/* Accessibility skip link */}
       <a href="#main-content" className="skip-to-content">
         Skip to content

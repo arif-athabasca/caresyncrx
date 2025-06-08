@@ -1,12 +1,11 @@
 import './globals.css';
 import type { Metadata } from 'next';
-// Remove the font import that's causing issues with Babel
-// import { Inter } from 'next/font/google';
+import { Inter } from 'next/font/google';
 import { AuthProvider } from '../auth/hooks/useAuth';
 import { IdleTimeoutProvider } from './components/IdleTimeoutProvider';
+import Script from 'next/script';
 
-// Use a CSS class instead of Next.js font module
-// const inter = Inter({ subsets: ['latin'] });
+const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
   title: 'CareSyncRx - Healthcare Prescription Management',
@@ -20,7 +19,15 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className="font-sans">
+      <head>
+        {/* Auth system scripts - loaded in specific order */}
+        <Script src="/token-management.js" strategy="beforeInteractive" />
+        <Script src="/auth-navigation.js" strategy="beforeInteractive" />
+        <Script src="/auth-error-handler.js" strategy="beforeInteractive" />
+        <Script src="/auth-logout.js" strategy="beforeInteractive" />
+        <Script src="/auth-verification.js" strategy="afterInteractive" />
+      </head>
+      <body className={inter.className}>
         <AuthProvider>
           <IdleTimeoutProvider>
             {children}

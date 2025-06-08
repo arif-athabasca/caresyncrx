@@ -12,7 +12,8 @@ import { useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from './useAuth';
 import { TokenStorage } from '../utils/token-storage';
-import { AUTH_CONFIG } from '@/auth';
+// Import directly from auth-config to avoid circular dependencies
+import { AUTH_CONFIG } from '../config/auth-config';
 
 /**
  * User activity events to track

@@ -9,9 +9,11 @@
  */
 
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
-import { UserRole } from '../index';
+// Import directly from enums.ts to avoid circular dependencies
+import { UserRole } from '../enums';
 import { TokenStorage } from '../utils/token-storage';
 import { deviceIdentity } from '../utils/device-identity';
+// Type definitions for window extensions are in window-auth.d.ts (imported implicitly)
 
 // Define user data structure
 interface User {
@@ -65,238 +67,161 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [error, setError] = useState<string | null>(null);
   const [isInitialized, setIsInitialized] = useState<boolean>(false);
   const [refreshErrorCount, setRefreshErrorCount] = useState<number>(0);
-    /**
+
+  /**
+   * Reset auth state and redirect to login
+   */
+  const resetAuthAndRedirect = useCallback((returnPath?: string) => {
+    // Clear user state
+    setUser(null);
+    
+    // Use the unified TokenManager for clearing tokens
+    if (window.TokenManager) {
+      window.TokenManager.clearTokens();
+    } else {
+      // Fallback to the original TokenStorage
+      TokenStorage.clearTokens();
+    }
+    
+    // Clear any in-progress flags
+    if (typeof sessionStorage !== 'undefined') {
+      sessionStorage.removeItem('refreshInProgress');
+    }
+    
+    // Store return path if provided
+    if (returnPath && typeof window !== 'undefined') {
+      if (window.TokenManager) {
+        window.TokenManager.storeNavigationState(returnPath);
+      } else {
+        TokenStorage.storeNavigationState(returnPath);
+      }
+    }
+    
+    // Use AuthNavigation if available, otherwise fall back to direct redirect
+    if (window.AuthNavigation) {
+      window.AuthNavigation.redirectToLogin(returnPath);
+    } else if (typeof window !== 'undefined' && !window.location.pathname.includes('/login')) {
+      const redirectQuery = returnPath ? `?redirect=${encodeURIComponent(returnPath)}` : '';
+      window.location.href = `/login${redirectQuery}`;
+    }
+  }, []);
+
+  /**
    * Handle token refresh when access token expires
    */
   const handleTokenRefresh = useCallback(async (): Promise<boolean> => {
     try {
-      // Check if a refresh is already in progress to prevent multiple simultaneous attempts
-      if (typeof sessionStorage !== 'undefined') {
-        const refreshInProgress = sessionStorage.getItem('refreshInProgress');
-        const now = Date.now();
-        
-        if (refreshInProgress) {
-          const refreshStartTime = parseInt(refreshInProgress, 10);
-          // If refresh started less than 2 seconds ago, wait for it to complete
-          if (now - refreshStartTime < 2000) {
-            console.log('Token refresh already in progress, waiting...');
-            // Wait a moment and then check if it succeeded
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            
-            // Check if user was set during the other refresh operation
-            const hasValidToken = !TokenStorage.isAccessTokenExpired();
-            if (hasValidToken) {
-              console.log('Another refresh process completed successfully');
-              sessionStorage.removeItem('refreshInProgress');
-              return true;
-            }
-          } else {
-            // Stale refresh operation, clear it
-            sessionStorage.removeItem('refreshInProgress');
+      // If AuthNavigation is available, use it for token refresh
+      if (window.AuthNavigation) {
+        try {
+          await window.AuthNavigation.refreshToken();
+          
+          // Fetch user data with new token
+          const userResponse = await fetch('/api/auth/me', {
+            headers: {
+              'Cache-Control': 'private, max-age=0, must-revalidate',
+              'Pragma': 'no-cache',
+              'Expires': '0'
+            },
+            credentials: 'include'
+          });
+          
+          if (userResponse.ok) {
+            const userData = await userResponse.json();
+            setUser(userData.user);
+            return true;
           }
+          
+          return false;
+        } catch (error) {
+          console.error('Token refresh failed using AuthNavigation:', error);
+          
+          // Get current path for return after login
+          const currentPath = typeof window !== 'undefined' ? 
+            window.location.pathname + window.location.search : '';
+            
+          // Use our reset function to handle this scenario
+          resetAuthAndRedirect(currentPath);
+          return false;
         }
-        
-        // Mark refresh as in progress
-        sessionStorage.setItem('refreshInProgress', now.toString());
       }
       
+      // Fall back to the original refresh logic if AuthNavigation is not available
+      // Simplified for this version
+      console.log('Attempting token refresh with stored token');
+      
       // Try to get refresh token from storage utility
-      const storedRefreshToken = TokenStorage.getRefreshToken();
+      const storedRefreshToken = window.TokenManager 
+        ? window.TokenManager.getRefreshToken() 
+        : TokenStorage.getRefreshToken();
       
       if (!storedRefreshToken) {
         console.warn('No refresh token available');
-        // No refresh token available, user needs to log in again
-        if (typeof sessionStorage !== 'undefined') {
-          sessionStorage.removeItem('refreshInProgress');
-        }
-        return false;
-      }      
-      // Validate the token format before sending to the server
-      if (!TokenStorage.validateTokenFormat(storedRefreshToken)) {
-        console.error('Invalid refresh token format found in storage');
-        TokenStorage.clearTokens();
-        if (typeof sessionStorage !== 'undefined') {
-          sessionStorage.removeItem('refreshInProgress');
-        }
         return false;
       }
       
-      // Get device ID from device identity system first, then fall back to TokenStorage
+      // Get device ID
       let deviceId: string | null = null;
       try {
         deviceId = await deviceIdentity.getDeviceId();
-        // Sync TokenStorage with DeviceIdentity for backward compatibility
-        if (deviceId && deviceId !== TokenStorage.getDeviceId()) {
-          TokenStorage.setDeviceId(deviceId);
-        }
       } catch (e) {
-        console.warn('Error getting device ID from device identity system, falling back to TokenStorage:', e);
-        deviceId = TokenStorage.getDeviceId();
+        console.warn('Error getting device ID:', e);
+        deviceId = window.TokenManager ? window.TokenManager.getDeviceId() : TokenStorage.getDeviceId();
       }
       
-      // Check for navigation state to help with browser back button
-      const lastNavPath = typeof sessionStorage !== 'undefined' ? 
-        sessionStorage.getItem('lastNavPath') : null;
-      
-      console.log('Attempting token refresh with stored token');
-      
-      // Call refresh endpoint with retry logic
-      let response;
-      let retryCount = 0;
-      const maxRetries = 2;
-      
-      while (retryCount <= maxRetries) {
-        try {
-          response = await fetch('/api/auth/refresh', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Cache-Control': 'private, max-age=0, must-revalidate',
-              'Pragma': 'no-cache',
-              'Expires': '0',
-              ...(lastNavPath ? { 'X-Last-Navigation-Path': lastNavPath } : {})
-            },
-            body: JSON.stringify({
-              refreshToken: storedRefreshToken,
-              deviceId: deviceId || undefined,
-            }),
-            credentials: 'include', // Include cookies in the request
-          });
-          
-          // If successful, break out of the retry loop
-          if (response.ok) {
-            break;
-          }
-          
-          // Only retry on network errors and 500 server errors
-          if (!response.ok && response.status !== 500 && response.status !== 503) {
-            console.error(`Token refresh failed with status: ${response.status}`);
-            break;
-          }
-          
-          // Increment retry counter
-          retryCount++;
-          
-          // If we've reached max retries, break out
-          if (retryCount > maxRetries) {
-            console.error(`Maximum retry attempts (${maxRetries}) reached for token refresh`);
-            break;
-          }
-          
-          // Exponential backoff
-          const waitTime = Math.min(1000 * Math.pow(2, retryCount), 5000);
-          console.log(`Retrying token refresh in ${waitTime}ms (attempt ${retryCount} of ${maxRetries})`);
-          await new Promise(resolve => setTimeout(resolve, waitTime));
-        } catch (e) {
-          // Increment retry counter for network errors
-          retryCount++;
-          
-          if (retryCount > maxRetries) {
-            console.error(`Maximum retry attempts (${maxRetries}) reached for token refresh`);
-            throw e;
-          }
-          
-          // Exponential backoff for network errors
-          const waitTime = Math.min(1000 * Math.pow(2, retryCount), 5000);
-          console.log(`Network error, retrying token refresh in ${waitTime}ms (attempt ${retryCount} of ${maxRetries})`);
-          await new Promise(resolve => setTimeout(resolve, waitTime));
-        }
-      }
-      
-      // Check if we got a valid response after retries
-      if (!response || !response.ok) {
-        const errorData = response ? await response.json().catch(() => ({ error: 'Unknown error' })) : { error: 'Network error' };
-        console.error('Token refresh failed after retries:', errorData.error);
+      // Call refresh endpoint
+      const response = await fetch('/api/auth/refresh', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-cache'
+        },
+        body: JSON.stringify({
+          refreshToken: storedRefreshToken,
+          deviceId: deviceId || undefined,
+        }),
+        credentials: 'include'
+      });
+        
+      if (!response.ok) {
+        console.error('Token refresh failed:', response.status);
         
         // If refresh failed, clear auth state
         setUser(null);
-        TokenStorage.clearTokens();
+        if (window.TokenManager) {
+          window.TokenManager.clearTokens();
+        } else {
+          TokenStorage.clearTokens();
+        }
         
-        // Clear the in-progress flag
-        sessionStorage.removeItem('refreshInProgress');
         return false;
       }
-        const data = await response.json();
+        
+      const data = await response.json();
       
-      console.log('Token refresh successful, storing new tokens');
-      
-      // Store new tokens using the utility
-      TokenStorage.setRefreshToken(data.tokens.refreshToken);
-      TokenStorage.setAccessToken(data.tokens.accessToken);
-      TokenStorage.updateLastActivity(); // Update activity timestamp
+      // Store new tokens using the available utility
+      if (window.TokenManager) {
+        window.TokenManager.setTokens(
+          data.tokens.accessToken,
+          data.tokens.refreshToken,
+          Date.now() + (15 * 60 * 1000) // Default to 15 minutes
+        );
+      } else {
+        TokenStorage.setRefreshToken(data.tokens.refreshToken);
+        TokenStorage.setAccessToken(data.tokens.accessToken);
+        TokenStorage.updateLastActivity();
+      }
       
       // Reset error count on successful refresh
       setRefreshErrorCount(0);
       
-      // Check if we received a navigation path header
-      if (response.headers.get('X-Auth-Refreshed') && lastNavPath) {
-        // We successfully refreshed during a browser navigation
-        console.log('Successfully refreshed token during browser navigation');
-      }
-      
-      // Fetch user data with new token
-      const userResponse = await fetch('/api/auth/me', {
-        headers: {
-          'Cache-Control': 'private, max-age=0, must-revalidate',
-          'Pragma': 'no-cache',
-          'Expires': '0'
-        },
-        credentials: 'include'
-      });
-      
-      if (userResponse.ok) {
-        const userData = await userResponse.json();
-        setUser(userData.user);
-        
-        // Clear the in-progress flag
-        sessionStorage.removeItem('refreshInProgress');
-        return true;
-      }      // Clear the in-progress flag
-      sessionStorage.removeItem('refreshInProgress');
-      return false;
+      return true;
     } catch (err) {
       console.error('Token refresh error:', err);
-      
-      // Increment error count to track persistent issues
       setRefreshErrorCount(prev => prev + 1);
-      
-      // Log detailed error information
-      const errorDetails = {
-        message: err instanceof Error ? err.message : String(err),
-        timestamp: new Date().toISOString(),
-        url: window.location.href,
-        hasRefreshToken: !!TokenStorage.getRefreshToken(),
-        refreshErrorCount: refreshErrorCount + 1
-      };
-      console.error('Detailed token refresh error:', JSON.stringify(errorDetails, null, 2));
-      
-      // Clear auth state on refresh error
-      setUser(null);
-      TokenStorage.clearTokens();
-      
-      // Clear the in-progress flag
-      sessionStorage.removeItem('refreshInProgress');
       return false;
     }
-  }, [refreshErrorCount]);
-
-  // Reset error count after successful authentication
-  useEffect(() => {
-    if (user) {
-      setRefreshErrorCount(0);
-    }
-  }, [user]);
-  
-  // Monitor refresh errors to detect persistent issues
-  useEffect(() => {
-    if (refreshErrorCount >= 3) {
-      console.error('Multiple token refresh failures detected, forcing logout');
-      // Force logout after 3 consecutive refresh errors
-      TokenStorage.clearTokens();
-      setUser(null);
-      setError('Session expired due to authentication issues. Please login again.');
-      setRefreshErrorCount(0);
-    }  }, [refreshErrorCount]);  
+  }, [refreshErrorCount, resetAuthAndRedirect]);
 
   // Check if user is authenticated on initial load  
   useEffect(() => {
@@ -306,82 +231,25 @@ export function AuthProvider({ children }: AuthProviderProps) {
         
         // Initialize device identity system first
         console.log('Initializing device identity system');
-        const deviceId = await deviceIdentity.init();
+        await deviceIdentity.init();
         
-        // Ensure device ID is stored in TokenStorage for backward compatibility
-        if (deviceId && !TokenStorage.getDeviceId()) {
-          TokenStorage.setDeviceId(deviceId);
-        } else if (TokenStorage.getDeviceId() && TokenStorage.getDeviceId() !== deviceId) {
-          // If we have a different device ID in TokenStorage, verify it
-          const isValid = await deviceIdentity.verifyDeviceId(TokenStorage.getDeviceId() as string);
-          if (isValid) {
-            // If valid, update device identity with the TokenStorage value
-            await deviceIdentity.verifyDeviceId(TokenStorage.getDeviceId() as string);
-          } else {
-            // If not valid, update TokenStorage with the device identity value
-            TokenStorage.setDeviceId(deviceId);
-          }
-        }
-        
-        // Always attempt to get user data on initialization - this helps with browser back button navigation
+        // Get user data
         const response = await fetch('/api/auth/me', {
-          credentials: 'include', // Always include cookies
+          credentials: 'include',
           headers: {
-            'Cache-Control': 'private, max-age=0, must-revalidate',
-            'Pragma': 'no-cache',
-            'Expires': '0'
+            'Cache-Control': 'no-cache'
           }
         });
         
         if (response.ok) {
           const userData = await response.json();
           setUser(userData.user);
-          // Mark successful authentication
-          TokenStorage.updateLastActivity();
         } else if (response.status === 401) {
-          console.log('Auth initialization: Token invalid or expired, attempting refresh');
           // Token expired or invalid, try to refresh
-          const refreshResult = await handleTokenRefresh();
-          
-          // If refresh failed and we have no user, prepare for fresh login
-          if (!refreshResult && !user) {
-            console.log('Auth initialization: Token refresh failed, preparing for fresh login');
-            // Clear any stale state
-            TokenStorage.clearTokens();
-            
-            // If there's a valid refresh token but refresh failed, something may be wrong with the token
-            // Let's verify the token's format and clear it if it looks invalid
-            const refreshToken = TokenStorage.getRefreshToken();
-            if (refreshToken) {
-              try {
-                // Basic JWT format check (header.payload.signature)
-                const parts = refreshToken.split('.');
-                if (parts.length !== 3) {
-                  console.warn('Auth initialization: Invalid refresh token format, clearing token');
-                  TokenStorage.clearTokens();
-                }
-              } catch (error) {
-                console.error('Auth initialization: Error checking token format:', error);
-                TokenStorage.clearTokens();
-              }
-            }
-          }
-        } else {
-          // Other error responses
-          console.error(`Auth initialization: Unexpected response status: ${response.status}`);          // Try to parse error message
-          try {
-            const errorData = await response.json();            console.error('Auth initialization error details:', errorData);
-          } catch {
-            console.error('Auth initialization: Could not parse error response');
-          }
+          await handleTokenRefresh();
         }
       } catch (err) {
         console.error('Auth initialization error:', err);
-        // Fall back to token refresh if network error occurred
-        if (err instanceof Error && (err.message.includes('network') || err.message.includes('fetch'))) {
-          console.log('Auth initialization: Network error, trying token refresh as fallback');
-          await handleTokenRefresh();
-        }
       } finally {
         setIsLoading(false);
         setIsInitialized(true);
@@ -389,185 +257,138 @@ export function AuthProvider({ children }: AuthProviderProps) {
     };
     
     initializeAuth();
-  }, [user, handleTokenRefresh]);
-
-  useEffect(() => {
-    const handleRefreshSignal = async () => {
-      // Check if refresh is needed based on tokens or navigation
-      if (TokenStorage.isRefreshNeededForNavigation()) {
-        console.log('Token refresh needed in useAuth');
-        await handleTokenRefresh();
-      }
-    };
-
-    // Check if we need to refresh on page load
-    handleRefreshSignal();
-    
-    // Set up listeners for navigation events
-    const handleNavigation = () => {
-      console.log('Navigation event detected in useAuth');
-      if (typeof window !== 'undefined') {
-        TokenStorage.storeNavigationState(window.location.pathname + window.location.search);
-      }
-      handleRefreshSignal();
-    };
-    
-    const handlePageShow = (event: PageTransitionEvent) => {
-      // When page is restored from back-forward cache
-      if (event.persisted) {
-        console.log('Page restored from BFCache in useAuth');
-        TokenStorage.markBfCacheRestoration();
-        
-        // Immediate check and refresh for BFCache
-        const refreshToken = TokenStorage.getRefreshToken();
-        if (refreshToken) {
-          console.log('Refreshing token immediately after BFCache restoration');
-          handleTokenRefresh();
-        }
-      }
-    };
-    
-    // Listen for various navigation events
-    window.addEventListener('focus', handleNavigation);
-    window.addEventListener('pageshow', handlePageShow);
-    window.addEventListener('popstate', handleNavigation);
-      return () => {
-      window.removeEventListener('focus', handleNavigation);
-      window.removeEventListener('pageshow', handlePageShow);
-      window.removeEventListener('popstate', handleNavigation);
-    };
   }, [handleTokenRefresh]);
 
   /**
-   * Login method
+   * Login user with email and password
    */
-  const login = async (email: string, password: string, deviceId?: string): Promise<LoginResult> => {
+  const login = useCallback(async (
+    email: string, 
+    password: string,
+    deviceId?: string
+  ): Promise<LoginResult> => {
     try {
       setIsLoading(true);
       setError(null);
       
-      // Generate a device ID if not provided
-      const finalDeviceId = deviceId || generateDeviceId();
+      // Get device ID if not provided
+      if (!deviceId) {
+        try {
+          deviceId = await deviceIdentity.getDeviceId();
+        } catch (e) {
+          console.warn('Error getting device ID during login:', e);
+        }
+      }
       
       const response = await fetch('/api/auth/login', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
-          'Pragma': 'no-cache',
-          'Expires': '0'
-        },
-        body: JSON.stringify({
-          email,
-          password,
-          deviceId: finalDeviceId,
-        }),
-        credentials: 'include',  // Include cookies in the request
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password, deviceId }),
+        credentials: 'include'
       });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Login failed');
+      }
       
       const data = await response.json();
       
-      if (!response.ok) {
-        throw new Error(data.error || 'Login failed');
-      }
-        // Store tokens using the centralized token storage utility
-      if (data.tokens?.refreshToken) {
-        TokenStorage.setRefreshToken(data.tokens.refreshToken);
-        TokenStorage.setAccessToken(data.tokens.accessToken);
-        TokenStorage.setDeviceId(finalDeviceId);
-      }
-      
-      // If 2FA is required, return without setting user
+      // Handle 2FA flow
       if (data.requiresTwoFactor) {
         return data;
       }
       
-      // Set user data in state
-      setUser(data.user);
+      // Store tokens using the appropriate utility
+      if (window.TokenManager) {
+        window.TokenManager.setTokens(
+          data.tokens.accessToken,
+          data.tokens.refreshToken,
+          Date.now() + (15 * 60 * 1000) // Default to 15 minutes
+        );
+        
+        // Store device ID if available
+        if (deviceId) {
+          window.TokenManager.setDeviceId(deviceId);
+        }
+      } else {
+        TokenStorage.setAccessToken(data.tokens.accessToken);
+        TokenStorage.setRefreshToken(data.tokens.refreshToken);
+        TokenStorage.updateLastActivity();
+        
+        // Store device ID if available
+        if (deviceId) {
+          TokenStorage.setDeviceId(deviceId);
+        }
+      }
       
+      setUser(data.user);
       return data;
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'An unexpected error occurred';
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Login failed';
       setError(errorMessage);
-      throw err;
+      throw error;
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
+
   /**
-   * Verify two-factor authentication during login
+   * Verify 2FA code for login
    */
-  const verify2FALogin = async (
+  const verify2FALogin = useCallback(async (
     tempToken: string,
     code: string,
-    rememberMe = false
+    rememberMe?: boolean
   ): Promise<{ success: boolean; error?: string }> => {
     try {
       setIsLoading(true);
       setError(null);
       
-      // Generate a device ID if not already stored
-      const deviceId = TokenStorage.getDeviceId() || generateDeviceId();
-      
-      // Call the verification endpoint
-      const response = await fetch('/api/auth/2fa/login-verify', {
+      const response = await fetch('/api/auth/verify-2fa', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
-          'Pragma': 'no-cache',
-          'Expires': '0'
-        },
-        body: JSON.stringify({
-          tempToken,
-          code,
-          deviceId,
-          rememberMe
-        }),
-        credentials: 'include',  // Include cookies in the request
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tempToken, code, rememberMe }),
+        credentials: 'include'
       });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Verification failed');
+      }
       
       const data = await response.json();
       
-      if (!response.ok) {
-        throw new Error(data.message || 'Verification failed');
-      }
-      
-      // Store tokens using the centralized token storage utility
-      if (data.tokens?.refreshToken) {
-        TokenStorage.setRefreshToken(data.tokens.refreshToken);
+      // Store tokens
+      if (window.TokenManager) {
+        window.TokenManager.setTokens(
+          data.tokens.accessToken,
+          data.tokens.refreshToken,
+          Date.now() + (15 * 60 * 1000) // Default to 15 minutes
+        );
+      } else {
         TokenStorage.setAccessToken(data.tokens.accessToken);
-        TokenStorage.setDeviceId(deviceId);
+        TokenStorage.setRefreshToken(data.tokens.refreshToken);
+        TokenStorage.updateLastActivity();
       }
       
-      // Set user data in state if successful
-      if (data.success && data.user) {
-        setUser(data.user);
-        return { success: true };
-      }
-      
-      return { 
-        success: false,
-        error: 'Invalid verification code'
-      };
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'An unexpected error occurred';
+      setUser(data.user);
+      return { success: true };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Verification failed';
       setError(errorMessage);
-      return {
-        success: false,
-        error: errorMessage
-      };
+      return { success: false, error: errorMessage };
     } finally {
       setIsLoading(false);
     }
-  };
-  
+  }, []);
+
   /**
    * Register a new user
    */
-  const register = async (
-    email: string, 
-    password: string, 
+  const register = useCallback(async (
+    email: string,
+    password: string,
     role: UserRole,
     clinicId: string
   ): Promise<LoginResult> => {
@@ -575,176 +396,180 @@ export function AuthProvider({ children }: AuthProviderProps) {
       setIsLoading(true);
       setError(null);
       
-      // Generate a device ID for this registration
-      const deviceId = generateDeviceId();
+      // Get device ID for registration
+      let deviceId: string | null = null;
+      try {
+        deviceId = await deviceIdentity.getDeviceId();
+      } catch (e) {
+        console.warn('Error getting device ID during registration:', e);
+      }
       
       const response = await fetch('/api/auth/register', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          email,
-          password,
-          role,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          email, 
+          password, 
+          role, 
           clinicId,
-          agreeToTerms: true,  // This is from the form
+          deviceId 
         }),
-        credentials: 'include',  // Include cookies in the request
+        credentials: 'include'
       });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Registration failed');
+      }
       
       const data = await response.json();
       
-      if (!response.ok) {
-        throw new Error(data.error || 'Registration failed');
+      // Store tokens
+      if (window.TokenManager) {
+        window.TokenManager.setTokens(
+          data.tokens.accessToken,
+          data.tokens.refreshToken,
+          Date.now() + (15 * 60 * 1000) // Default to 15 minutes
+        );
+        
+        if (deviceId) {
+          window.TokenManager.setDeviceId(deviceId);
+        }
+      } else {
+        TokenStorage.setAccessToken(data.tokens.accessToken);
+        TokenStorage.setRefreshToken(data.tokens.refreshToken);
+        TokenStorage.updateLastActivity();
+        
+        if (deviceId) {
+          TokenStorage.setDeviceId(deviceId);
+        }
       }
       
-      // Store refresh token in localStorage
-      if (data.tokens?.refreshToken) {
-        localStorage.setItem('refreshToken', data.tokens.refreshToken);
-        localStorage.setItem('deviceId', deviceId);
-      }
-      
-      // Set user data in state
       setUser(data.user);
-      
       return data;
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'An unexpected error occurred';
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Registration failed';
       setError(errorMessage);
-      throw err;
+      throw error;
     } finally {
       setIsLoading(false);
     }
-  };
-  
+  }, []);
+
   /**
-   * Logout the current user
-   */  const logout = async (): Promise<void> => {
+   * Logout the user
+   */
+  const logout = useCallback(async (): Promise<void> => {
     try {
       setIsLoading(true);
       
-      // Get refresh token to invalidate it on the backend
-      const refreshToken = TokenStorage.getRefreshToken();
+      // Use the AuthLogout system if available
+      if (window.AuthLogout) {
+        await window.AuthLogout.logout();
+      } else {
+        // Otherwise perform a standard logout
+        await fetch('/api/auth/logout', {
+          method: 'POST',
+          credentials: 'include'
+        });
+        
+        // Clear tokens and state
+        if (window.TokenManager) {
+          window.TokenManager.clearTokens();
+        } else {
+          TokenStorage.clearTokens();
+        }
+      }
       
-      // Call logout endpoint
-      await fetch('/api/auth/logout', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
-          'Pragma': 'no-cache',
-          'Expires': '0'
-        },
-        body: JSON.stringify({
-          refreshToken: refreshToken || undefined,
-        }),
-        credentials: 'include', // Include cookies for server recognition
-      });
+      // Clear user state
+      setUser(null);
       
-      // Clear local state regardless of server response
+      // Redirect to login page on next render cycle
+      if (typeof window !== 'undefined') {
+        window.location.href = '/login';
+      }
+    } catch (error) {
+      console.error('Logout error:', error);
+      
+      // Ensure tokens and state are cleared even if the API call fails
+      if (window.TokenManager) {
+        window.TokenManager.clearTokens();
+      } else {
+        TokenStorage.clearTokens();
+      }
+      
       setUser(null);
-      TokenStorage.clearTokens();
-    } catch (err) {
-      console.error('Logout error:', err);
-      // Still clear local state even if there's an error
-      setUser(null);
-      TokenStorage.clearTokens();
+      
+      // Still redirect to login
+      if (typeof window !== 'undefined') {
+        window.location.href = '/login';
+      }
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
+
   /**
-   * Refresh access token using a refresh token
+   * Manually refresh token (rarely needed directly)
    */
-  const refreshToken = async (
+  const refreshToken = useCallback(async (
     refreshToken: string,
     deviceId?: string
   ): Promise<{ accessToken: string; refreshToken: string }> => {
     try {
-      setIsLoading(true);
+      const response = await fetch('/api/auth/refresh', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refreshToken, deviceId }),
+        credentials: 'include'
+      });
       
-      // Try up to 3 times with exponential backoff
-      let lastError: Error | null = null;
-      for (let attempt = 0; attempt < 3; attempt++) {
-        try {
-          const response = await fetch('/api/auth/refresh', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Cache-Control': 'no-cache, no-store, must-revalidate',
-              'Pragma': 'no-cache',
-              'Expires': '0'
-            },
-            body: JSON.stringify({
-              refreshToken,
-              deviceId,
-            }),
-            credentials: 'include', // Include cookies
-          });
-          
-          if (!response.ok) {
-            const data = await response.json();
-            throw new Error(data.error || data.details || 'Token refresh failed');
-          }
-            const data = await response.json();
-          
-          // Use token storage utility for consistency          
-          TokenStorage.setRefreshToken(data.tokens.refreshToken);          
-          TokenStorage.setAccessToken(data.tokens.accessToken);
-          TokenStorage.updateLastActivity();
-          
-          return data.tokens;
-        } catch (err) {
-          lastError = err instanceof Error ? err : new Error(String(err));
-          console.error(`Token refresh attempt ${attempt + 1} failed:`, lastError);
-          
-          // Only retry for certain error types
-          if (attempt < 2) {
-            const waitTime = Math.min(1000 * Math.pow(2, attempt), 3000);
-            await new Promise(resolve => setTimeout(resolve, waitTime));
-          }
-        }
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Token refresh failed');
       }
       
-      // If we've exhausted all retries, throw the last error
-      if (lastError) {
-        throw lastError;
+      const data = await response.json();
+      
+      // Store tokens
+      if (window.TokenManager) {
+        window.TokenManager.setTokens(
+          data.tokens.accessToken,
+          data.tokens.refreshToken,
+          Date.now() + (15 * 60 * 1000) // Default to 15 minutes
+        );
+      } else {
+        TokenStorage.setAccessToken(data.tokens.accessToken);
+        TokenStorage.setRefreshToken(data.tokens.refreshToken);
+        TokenStorage.updateLastActivity();
       }
       
-      // This should not happen, but TypeScript requires a return statement
-      throw new Error('Failed to refresh token after multiple attempts');
-    } catch (err) {
-      console.error('Token refresh error:', err);
-      setError(err instanceof Error ? err.message : 'Unknown error refreshing token');
-      throw err;
-    } finally {
-      setIsLoading(false);
+      return data.tokens;
+    } catch (error) {
+      console.error('Manual token refresh error:', error);
+      throw error;
     }
-  };
-  
+  }, []);
+
   /**
    * Clear any error messages
    */
-  const clearError = () => {
+  const clearError = useCallback(() => {
     setError(null);
-  };
+  }, []);
 
-  // Compute derived state
-  const isAuthenticated = !!user;
-  
-  // Create context value
-  const contextValue: AuthContextType = {
+  // Authentication context value
+  const contextValue = {
     user,
     isLoading,
     error,
-    isAuthenticated,
+    isAuthenticated: !!user,
     login,
     verify2FALogin,
     register,
     logout,
     refreshToken,
-    clearError,
+    clearError
   };
 
   return (
@@ -760,18 +585,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
 export function useAuth(): AuthContextType {
   const context = useContext(AuthContext);
   
-  if (!context) {
+  if (context === undefined) {
     throw new Error('useAuth must be used within an AuthProvider');
   }
   
   return context;
-}
-
-/**
- * Generate a device ID
- */
-function generateDeviceId(): string {
-  const timestamp = Date.now().toString(36);
-  const randomStr = Math.random().toString(36).substring(2, 10);
-  return `device-${timestamp}-${randomStr}`;
 }

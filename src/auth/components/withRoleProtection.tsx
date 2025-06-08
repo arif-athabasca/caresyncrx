@@ -33,7 +33,8 @@ export function withRoleProtection<T extends object>(
     const router = useRouter();
     const { allowedRoles, redirectPath = '/login' } = options;
     const [isCheckingAuth, setIsCheckingAuth] = useState(true);
-      // Check authentication status on component mount
+    
+    // Check authentication status on component mount
     useEffect(() => {
       const checkAuthStatus = async () => {
         try {
@@ -44,44 +45,100 @@ export function withRoleProtection<T extends object>(
           }
           
           // Check if token refresh is needed for navigation
-          if (TokenStorage.isRefreshNeededForNavigation()) {
-            console.log('Token refresh needed in protected route');
-            
-            // Store current path for potential return after login
-            if (typeof window !== 'undefined') {
-              TokenStorage.storeNavigationState(window.location.pathname + window.location.search);
-            }
-            
-            try {
-              // Attempt to refresh token
-              const refreshToken = TokenStorage.getRefreshToken();
-              const deviceId = TokenStorage.getDeviceId();
+          try {
+            // Use the imported TokenStorage first
+            const needsRefresh = typeof TokenStorage.isRefreshNeededForNavigation === 'function' ? 
+              TokenStorage.isRefreshNeededForNavigation() : false;
               
-              if (refreshToken) {
-                console.log('Attempting token refresh in withRoleProtection');
-                const response = await fetch('/api/auth/refresh', {
-                  method: 'POST',
-                  headers: {
-                    'Content-Type': 'application/json',
-                    'Cache-Control': 'private, max-age=0, must-revalidate',
-                    'Pragma': 'no-cache',
-                    'Expires': '0',
-                    'X-Navigation-Source': 'role-protection'
-                  },
-                  body: JSON.stringify({
-                    refreshToken,
-                    deviceId
-                  }),
-                  credentials: 'include'
-                });
-                
-                if (!response.ok) {
-                  console.warn('Token refresh failed in protected route');
+            if (needsRefresh) {
+              console.log('Token refresh needed in protected route');
+              
+              // Store current path for potential return after login
+              if (typeof window !== 'undefined') {
+                try {
+                  // Store navigation state using the most reliable method available
+                  if (typeof TokenStorage.storeNavigationState === 'function') {
+                    TokenStorage.storeNavigationState(window.location.pathname + window.location.search);
+                  } else if (typeof window.TokenStorage?.storeNavigationState === 'function') {
+                    window.TokenStorage.storeNavigationState(window.location.pathname + window.location.search);
+                  } else {
+                    // Fallback to direct sessionStorage
+                    sessionStorage.setItem('lastNavigationPath', window.location.pathname + window.location.search);
+                  }
+                } catch (e) {
+                  console.warn('Error storing navigation state:', e);
+                  // Fallback to direct sessionStorage
+                  try {
+                    sessionStorage.setItem('lastNavigationPath', window.location.pathname + window.location.search);
+                  } catch (innerE) {
+                    console.error('Failed to store navigation path:', innerE);
+                  }
                 }
               }
-            } catch (refreshError) {
-              console.error('Error during token refresh:', refreshError);
+              
+              try {
+                // Attempt to refresh token
+                const refreshToken = TokenStorage.getRefreshToken();
+                const deviceId = TokenStorage.getDeviceId();
+                
+                if (refreshToken) {
+                  console.log('Attempting token refresh in withRoleProtection');
+                  const response = await fetch('/api/auth/refresh', {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json',
+                      'Cache-Control': 'private, max-age=0, must-revalidate',
+                      'Pragma': 'no-cache',
+                      'Expires': '0',
+                      'X-Navigation-Source': 'role-protection'
+                    },
+                    body: JSON.stringify({
+                      refreshToken,
+                      deviceId
+                    }),
+                    credentials: 'include'
+                  });
+                  
+                  if (!response.ok) {
+                    console.warn('Token refresh failed in protected route');
+                    
+                    // For 401 errors, handle token expiration
+                    if (response.status === 401) {
+                      // Get response data
+                      const errorData = await response.json().catch(() => ({}));
+                      const errorMessage = errorData.error || errorData.message || 'Unauthorized';
+                      
+                      // Check if this is a token expiration
+                      if (errorMessage.includes('expired') || errorMessage.includes('invalid token')) {
+                        console.log('Token expired in protected route, redirecting to login');
+                        
+                        // Clear tokens
+                        TokenStorage.clearTokens();
+                        
+                        // Get current path for redirect after login
+                        const currentPath = window.location.pathname + window.location.search;
+                        
+                        // Dispatch a token expired event
+                        if (typeof document !== 'undefined') {
+                          document.dispatchEvent(new CustomEvent('token-expired', {
+                            detail: {
+                              message: errorMessage,
+                              returnPath: currentPath
+                            }
+                          }));
+                        }
+                        
+                        return;
+                      }
+                    }
+                  }
+                }
+              } catch (refreshError) {
+                console.error('Error during token refresh:', refreshError);
+              }
             }
+          } catch (e) {
+            console.error('Error handling token refresh:', e);
           }
           
           // Get current user info with latest tokens
@@ -113,7 +170,8 @@ export function withRoleProtection<T extends object>(
       };
       
       checkAuthStatus();
-        // Set up pageshow event listener for back/forward navigation
+      
+      // Set up pageshow event listener for back/forward navigation
       const handlePageShow = (event: PageTransitionEvent) => {
         if (event.persisted) {
           console.log('Page restored from back/forward cache in withRoleProtection');

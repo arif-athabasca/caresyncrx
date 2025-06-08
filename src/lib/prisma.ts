@@ -3,6 +3,7 @@
  * MIT License
  * 
  * Singleton Prisma client for the CareSyncRx platform.
+ * Enhanced to handle both client and server environments.
  */
 
 import { PrismaClient } from '@prisma/client';
@@ -12,16 +13,30 @@ declare global {
   var prisma: PrismaClient | undefined;
 }
 
-// Prevent multiple instances of Prisma Client in development
-const prismaClient = global.prisma || new PrismaClient({
-  log: process.env.NODE_ENV === 'development' 
-    ? ['error', 'warn'] 
-    : ['error'],
-});
-
-if (process.env.NODE_ENV === 'development') {
-  global.prisma = prismaClient;
+/**
+ * Initialize PrismaClient safely in any environment
+ */
+function getPrismaClient() {
+  // In production, each instance will have its own client
+  // In development, we'll share a single instance to avoid database connection issues
+  if (process.env.NODE_ENV === 'production') {
+    return new PrismaClient({
+      log: ['error'],
+    });
+  }
+  
+  // For development and testing, reuse the existing connection
+  if (!global.prisma) {
+    global.prisma = new PrismaClient({
+      log: ['error', 'warn'],
+    });
+  }
+  
+  return global.prisma;
 }
+
+// Initialize the client
+const prismaClient = getPrismaClient();
 
 // Export both as default and named export for flexibility
 export default prismaClient;

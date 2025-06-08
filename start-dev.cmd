@@ -12,6 +12,16 @@ if %ERRORLEVEL% neq 0 (
   exit /b 1
 )
 
+:: Check if port 3000 is in use and notify the user
+echo Checking port 3000 status...
+netstat -ano | findstr :3000 | findstr LISTENING >nul
+if %ERRORLEVEL% equ 0 (
+  echo.
+  echo Port 3000 is currently in use.
+  echo The script will attempt to free this port automatically.
+  echo.
+)
+
 :: Start the development server using our optimized script
 echo Starting development server with optimized configuration...
 echo.

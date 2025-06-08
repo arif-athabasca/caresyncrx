@@ -58,20 +58,35 @@ function NewTriagePage() {
       router.push('/login?redirect=/admin/triage/new');
     }
   }, [user, authLoading, router]);
-  
-  // Track navigation and ensure tokens are fresh
+    // Track navigation and ensure tokens are fresh
   useEffect(() => {
     const trackNavigationAndRefresh = async () => {
       if (typeof window !== 'undefined') {
         // Store this path for navigation tracking
         const fullPath = window.location.pathname + window.location.search;
         console.log('Tracking navigation on triage page:', fullPath);
-        TokenStorage.storeNavigationState(fullPath);
         
-        // Check if we need to refresh tokens
-        if (TokenStorage.isRefreshNeededForNavigation()) {
-          console.log('Refresh needed on triage page load');
-          try {
+        try {
+          // Ensure TokenStorage is available with required methods
+          if (window.TokenStorage && typeof window.TokenStorage.storeNavigationState === 'function') {
+            window.TokenStorage.storeNavigationState(fullPath);
+          } else if (typeof TokenStorage.storeNavigationState === 'function') {
+            TokenStorage.storeNavigationState(fullPath);
+          } else {
+            // Fallback - store in session storage directly
+            if (typeof sessionStorage !== 'undefined') {
+              sessionStorage.setItem('lastNavigationPath', fullPath);
+            }
+          }
+          
+          // Check if we need to refresh tokens - use window.TokenStorage if available for consistent behavior
+          const needsRefresh = 
+            (window.TokenStorage && typeof window.TokenStorage.isRefreshNeededForNavigation === 'function' && window.TokenStorage.isRefreshNeededForNavigation()) ||
+            (typeof TokenStorage.isRefreshNeededForNavigation === 'function' && TokenStorage.isRefreshNeededForNavigation());
+          
+          if (needsRefresh) {
+            console.log('Refresh needed on triage page load');
+            
             // First do a quick verification to see if we even need a refresh
             const verifyResponse = await fetch('/api/auth/verify-token', {
               method: 'GET',
@@ -90,6 +105,18 @@ function NewTriagePage() {
             if (!verifyData.valid) {
               console.log('Token verification failed, refreshing token');
               
+              // Get the refresh token - using consistent method
+              const refreshToken = 
+                (window.TokenStorage && typeof window.TokenStorage.getRefreshToken === 'function') ? 
+                window.TokenStorage.getRefreshToken() : 
+                TokenStorage.getRefreshToken();
+                
+              // Get device ID - using consistent method
+              const deviceId = 
+                (window.TokenStorage && typeof window.TokenStorage.getDeviceId === 'function') ? 
+                window.TokenStorage.getDeviceId() : 
+                TokenStorage.getDeviceId();
+              
               // Refresh via direct API call for most immediate response
               const response = await fetch('/api/auth/refresh', {
                 method: 'POST',
@@ -101,8 +128,8 @@ function NewTriagePage() {
                   'X-Source': 'triage-page-navigation'
                 },
                 body: JSON.stringify({
-                  refreshToken: TokenStorage.getRefreshToken(),
-                  deviceId: TokenStorage.getDeviceId()
+                  refreshToken: refreshToken,
+                  deviceId: deviceId
                 }),
                 credentials: 'include'
               });
@@ -113,8 +140,28 @@ function NewTriagePage() {
                 
                 // Explicitly store the new tokens to ensure they're saved
                 if (data.tokens) {
+                  // Store in window.TokenStorage if available
+                  if (window.TokenStorage) {
+                    if (typeof window.TokenStorage.setAccessToken === 'function') {
+                      window.TokenStorage.setAccessToken(data.tokens.accessToken);
+                    }
+                    if (typeof window.TokenStorage.setRefreshToken === 'function') {
+                      window.TokenStorage.setRefreshToken(data.tokens.refreshToken);
+                    }
+                  }
+                  
+                  // Also store in the imported TokenStorage
                   TokenStorage.setAccessToken(data.tokens.accessToken);
                   TokenStorage.setRefreshToken(data.tokens.refreshToken);
+                  
+                  // Store directly in localStorage as fallback
+                  localStorage.setItem('accessToken', data.tokens.accessToken);
+                  localStorage.setItem('refreshToken', data.tokens.refreshToken);
+                  
+                  // Mark refresh as complete
+                  if (typeof sessionStorage !== 'undefined') {
+                    sessionStorage.removeItem('refreshInProgress');
+                  }
                 }
                 
                 // Get current user data to update auth state
@@ -129,17 +176,53 @@ function NewTriagePage() {
                 });
               } else {
                 console.warn('Token refresh failed in triage page');
-                // If refresh fails and we're on a protected page, redirect to login
-                const errorData = await response.json();
+                
+                // Get the error data
+                const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
                 console.error('Refresh error:', errorData);
                 
-                if (response.status === 401) {
-                  router.replace('/login?redirect=/admin/triage/new&token_expired=true');
+                // Use our global token refresh error handler if available
+                if (typeof window.handleTokenRefreshError === 'function') {
+                  window.handleTokenRefreshError(
+                    errorData.error || errorData.message || 'Token refresh failed', 
+                    '/admin/triage/new'
+                  );
+                } else {
+                  // Fallback handling
+                  const isExpiredToken = 
+                    (errorData.error && errorData.error.includes('expired')) || 
+                    (errorData.message && errorData.message.includes('expired'));
+                  
+                  if (response.status === 401 || isExpiredToken) {
+                    // Use the token-expired event for consistent handling
+                    document.dispatchEvent(new CustomEvent('token-expired', {
+                      detail: {
+                        message: errorData.error || errorData.message || 'Token expired',
+                        returnPath: '/admin/triage/new'
+                      }
+                    }));
+                  } else {
+                    // Direct navigation as last resort
+                    router.replace('/login?redirect=/admin/triage/new&token_expired=true');
+                  }
                 }
               }
             }
-          } catch (error) {
-            console.error('Error refreshing token in triage page:', error);
+          }
+        } catch (error) {
+          console.error('Error in token refresh handling on triage page:', error);
+          
+          // Use our global token refresh error handler if available
+          if (typeof window.handleTokenRefreshError === 'function') {
+            window.handleTokenRefreshError(error, '/admin/triage/new');
+          } else if (typeof document !== 'undefined') {
+            // Dispatch token expired event as fallback
+            document.dispatchEvent(new CustomEvent('token-expired', {
+              detail: {
+                message: error instanceof Error ? error.message : String(error),
+                returnPath: '/admin/triage/new'
+              }
+            }));
           }
         }
       }

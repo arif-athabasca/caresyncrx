@@ -36,12 +36,12 @@ function LoginContent() {
   const { login, isLoading } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
-  
-  // Get redirect URL from query params if present
-  const redirect = searchParams.get('redirect') || '/dashboard';
-  // Check if user was logged out due to session timeout
+    // Get redirect URL from query params if present
+  const redirect = searchParams.get('redirect') || '/dashboard';  // Check if user was logged out due to session timeout
   const timeout = searchParams.get('timeout');
   const error = searchParams.get('error');
+  const tokenExpired = searchParams.get('token_expired');
+  const timestamp = searchParams.get('t'); // Just for cache busting
   
   // Form state
   const [formData, setFormData] = useState({
@@ -56,7 +56,7 @@ function LoginContent() {
     form?: string;
     info?: string;
   }>({});
-    // Show session timeout message if applicable
+  // Show session timeout message if applicable
   useEffect(() => {
     if (timeout === 'true') {
       setErrors({
@@ -65,13 +65,16 @@ function LoginContent() {
     } else if (error === 'logout') {
       setErrors({
         info: 'There was an issue with your session. Please log in again.'
+      });    } else if (tokenExpired === 'true' || timeout === 'token_expired') {
+      setErrors({
+        info: 'Your login session has expired. Please log in again to continue.'
       });
     } else if (timeout) {
       setErrors({
         info: 'Your session has ended. Please log in again.'
       });
     }
-  }, [timeout, error]);
+  }, [timeout, error, tokenExpired]);
   
   // Handle form field changes
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {

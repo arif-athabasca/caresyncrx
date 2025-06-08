@@ -55,6 +55,32 @@ npm run security:test:logs
 npm run security:test
 ```
 
+## Authentication System
+
+CareSyncRx features a robust authentication system:
+
+- **Unified Token Management**: Consolidated approach to token storage and validation
+- **Device Identity**: Enhanced device fingerprinting and identification
+- **Browser Navigation Handling**: Proper handling of back/forward navigation
+- **Role-Based Access Control**: Protection of routes based on user roles
+
+For more information, see the [authentication system documentation](./docs/auth-system/README.md).
+
+### Authentication Testing
+
+The system includes several tools for testing the authentication system:
+
+```bash
+# Run a comprehensive authentication test suite
+./Test-AuthSystem.ps1 -Full
+
+# Run only integration tests
+./Test-AuthSystem.ps1 -Integration
+
+# Run only real-world flow tests
+./Test-AuthSystem.ps1 -RealWorld
+```
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:

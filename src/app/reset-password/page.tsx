@@ -12,7 +12,7 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { AuthCard } from '../components/auth/AuthCard';
 import { AuthInput } from '../components/auth/AuthInput';
-import { PasswordValidator } from '../../auth/utils/password-validator';
+import { passwordValidator, passwordSchema } from '../../auth/utils/password-validator';
 import { Button } from '../components/ui/Button';
 import { Alert } from '../components/ui/Alert';
 import { Progress } from '../components/ui/Progress';

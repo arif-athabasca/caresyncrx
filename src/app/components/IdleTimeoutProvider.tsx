@@ -12,7 +12,8 @@
 
 import React, { ReactNode, useEffect, useCallback } from 'react';
 import { useIdleTimeout } from '../../auth/hooks/useIdleTimeout';
-import { AUTH_CONFIG } from '@/auth';
+// Import directly from config to avoid circular dependencies
+import { AUTH_CONFIG } from '../../auth/config/auth-config';
 import { useAuth } from '../../auth/hooks/useAuth';
 import { useRouter } from 'next/navigation';
 import { TokenStorage } from '../../auth/utils/token-storage';

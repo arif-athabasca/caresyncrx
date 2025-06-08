@@ -8,7 +8,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { RateLimiter } from '@/shared/middleware/rate-limit';
 import { AuditLogger } from '@/shared/services/audit-logger';
-import { PasswordValidator } from '../../../../auth/utils/password-validator';
+import { passwordValidator } from '../../../../auth/utils/password-validator';
 import { hash } from '../../../../auth/utils/bcrypt-browser';
 
 /**

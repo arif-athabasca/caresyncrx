@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Auth Integration Test</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+      line-height: 1.6;
+    }
+    h1 {
+      color: #333;
+      border-bottom: 1px solid #eee;
+      padding-bottom: 10px;
+    }
+    .test-section {
+      margin-bottom: 20px;
+      padding: 15px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+    }
+    .test-title {
+      font-weight: bold;
+      margin-bottom: 10px;
+    }
+    .test-output {
+      background-color: #f8f8f8;
+      padding: 10px;
+      border-radius: 4px;
+      font-family: monospace;
+      max-height: 200px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+    }
+    .success {
+      color: green;
+    }
+    .failure {
+      color: red;
+    }
+    button {
+      background-color: #4CAF50;
+      border: none;
+      color: white;
+      padding: 10px 15px;
+      text-align: center;
+      text-decoration: none;
+      display: inline-block;
+      font-size: 16px;
+      margin: 4px 2px;
+      cursor: pointer;
+      border-radius: 4px;
+    }
+    button:disabled {
+      background-color: #cccccc;
+      cursor: not-allowed;
+    }
+    .doc-references {
+      margin-top: 30px;
+      padding: 15px;
+      background-color: #f8f8f8;
+      border-radius: 4px;
+    }
+    .doc-references h3 {
+      margin-top: 0;
+    }
+    .doc-references ul {
+      padding-left: 20px;
+    }
+    .doc-references a {
+      color: #007bff;
+      text-decoration: none;
+    }
+    .doc-references a:hover {
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+  <h1>Auth Integration Test</h1>
+  <p>This page tests the integration between the authentication systems in the CareSyncRx application.</p>
+  
+  <div class="test-section">
+    <div class="test-title">1. Token Management System Check</div>
+    <button id="test-token-management">Run Test</button>
+    <div id="token-management-output" class="test-output"></div>
+  </div>
+  
+  <div class="test-section">
+    <div class="test-title">2. Auth Navigation Integration</div>
+    <button id="test-auth-navigation">Run Test</button>
+    <div id="auth-navigation-output" class="test-output"></div>
+  </div>
+  
+  <div class="test-section">
+    <div class="test-title">3. Device Identity Integration</div>
+    <button id="test-device-identity">Run Test</button>
+    <div id="device-identity-output" class="test-output"></div>
+  </div>
+  
+  <div class="test-section">
+    <div class="test-title">4. Simulated Token Refresh</div>
+    <button id="test-token-refresh">Run Test</button>
+    <div id="token-refresh-output" class="test-output"></div>
+  </div>
+  
+  <div class="doc-references">
+    <h3>Documentation References</h3>
+    <p>For more information about the authentication system, please refer to:</p>
+    <ul>
+      <li><a href="/docs/auth-system/README.md" target="_blank">Authentication System Overview</a></li>
+      <li><a href="/docs/auth-system/overhaul.md" target="_blank">Authentication System Overhaul</a></li>
+      <li><a href="/docs/auth-system/testing-guide.md" target="_blank">Testing Guide</a></li>
+    </ul>
+  </div>
+  
+  <script src="token-management.js"></script>
+  <script src="auth-navigation.js"></script>
+  <script src="auth-verification.js"></script>
+  <script src="auth-error-handler.js"></script>
+  <script src="auth-logout.js"></script>
+  
+  <script>
+    // Helper functions
+    function log(element, message, isSuccess = true) {
+      const div = document.getElementById(element);
+      const timestamp = new Date().toISOString().slice(11, 19);
+      const cssClass = isSuccess ? 'success' : 'failure';
+      div.innerHTML += `<div class="${cssClass}">[${timestamp}] ${message}</div>`;
+    }
+    
+    function clearLog(element) {
+      const div = document.getElementById(element);
+      div.innerHTML = '';
+    }
+    
+    // Test 1: Token Management System
+    document.getElementById('test-token-management').addEventListener('click', async function() {
+      clearLog('token-management-output');
+      this.disabled = true;
+      
+      try {
+        // Check if TokenManager exists
+        if (!window.TokenManager) {
+          log('token-management-output', 'TokenManager not found!', false);
+          return;
+        }
+        
+        log('token-management-output', 'TokenManager found and initialized');
+        
+        // Test token storage
+        const testAccessToken = 'test_access_token_' + Date.now();
+        const testRefreshToken = 'test_refresh_token_' + Date.now();
+        const testExpiresAt = Date.now() + 3600000; // 1 hour from now
+        
+        // Set tokens
+        TokenManager.setTokens(testAccessToken, testRefreshToken, testExpiresAt);
+        log('token-management-output', 'Tokens set successfully');
+        
+        // Get tokens
+        const storedAccessToken = TokenManager.getAccessToken();
+        const storedRefreshToken = TokenManager.getRefreshToken();
+        const storedExpiresAt = TokenManager.getExpiresAt();
+        
+        // Verify tokens
+        if (storedAccessToken === testAccessToken) {
+          log('token-management-output', 'Access token verification successful');
+        } else {
+          log('token-management-output', `Access token mismatch: ${storedAccessToken} vs ${testAccessToken}`, false);
+        }
+        
+        if (storedRefreshToken === testRefreshToken) {
+          log('token-management-output', 'Refresh token verification successful');
+        } else {
+          log('token-management-output', `Refresh token mismatch: ${storedRefreshToken} vs ${testRefreshToken}`, false);
+        }
+        
+        if (storedExpiresAt === testExpiresAt) {
+          log('token-management-output', 'Expiry time verification successful');
+        } else {
+          log('token-management-output', `Expiry time mismatch: ${storedExpiresAt} vs ${testExpiresAt}`, false);
+        }
+        
+        // Test token validation
+        const isValid = TokenManager.validateTokenFormat(testAccessToken);
+        log('token-management-output', `Token format validation: ${isValid ? 'Failed - should reject non-JWT token' : 'Success - rejected non-JWT token'}`, !isValid);
+        
+        // Test token expiration check
+        const isExpired = TokenManager.isAccessTokenExpired();
+        log('token-management-output', `Token expiration check: ${isExpired ? 'Failed - token should not be expired' : 'Success - token not expired'}`, !isExpired);
+        
+        // Test clear tokens
+        TokenManager.clearTokens();
+        const clearedAccessToken = TokenManager.getAccessToken();
+        
+        if (!clearedAccessToken) {
+          log('token-management-output', 'Clear tokens successful');
+        } else {
+          log('token-management-output', 'Clear tokens failed', false);
+        }
+        
+        log('token-management-output', 'Token Management System Test Complete');
+      } catch (error) {
+        log('token-management-output', `Error: ${error.message}`, false);
+      } finally {
+        this.disabled = false;
+      }
+    });
+    
+    // Test 2: Auth Navigation Integration
+    document.getElementById('test-auth-navigation').addEventListener('click', async function() {
+      clearLog('auth-navigation-output');
+      this.disabled = true;
+      
+      try {
+        // Check if AuthNavigation exists
+        if (!window.AuthNavigation) {
+          log('auth-navigation-output', 'AuthNavigation not found!', false);
+          return;
+        }
+        
+        log('auth-navigation-output', 'AuthNavigation found and initialized');
+        
+        // Test public path detection
+        const currentPath = window.location.pathname;
+        const isPublic = AuthNavigation.isPublicPath(currentPath);
+        log('auth-navigation-output', `Current path (${currentPath}) is ${isPublic ? 'public' : 'protected'}`);
+        
+        // Test navigation state storage
+        const testPath = '/test-path' + Date.now();
+        TokenManager.storeNavigationState(testPath);
+        
+        // Add a test token
+        const testRefreshToken = 'test_refresh_token_' + Date.now();
+        TokenManager.setRefreshToken(testRefreshToken);
+        
+        // Test refresh needed check
+        const refreshNeeded = AuthNavigation.isRefreshNeeded();
+        log('auth-navigation-output', `Refresh needed: ${refreshNeeded}`);
+        
+        // Test redirect throttling
+        const isThrottled = AuthNavigation.isRedirectThrottled();
+        log('auth-navigation-output', `Redirect throttled: ${isThrottled}`);
+        
+        log('auth-navigation-output', 'Auth Navigation Integration Test Complete');
+      } catch (error) {
+        log('auth-navigation-output', `Error: ${error.message}`, false);
+      } finally {
+        this.disabled = false;
+      }
+    });
+    
+    // Test 3: Device Identity Integration
+    document.getElementById('test-device-identity').addEventListener('click', async function() {
+      clearLog('device-identity-output');
+      this.disabled = true;
+      
+      try {
+        // Set a test device ID
+        const testDeviceId = 'test_device_id_' + Date.now();
+        TokenManager.setDeviceId(testDeviceId);
+        log('device-identity-output', `Device ID set: ${testDeviceId}`);
+        
+        // Retrieve the device ID
+        const storedDeviceId = TokenManager.getDeviceId();
+        
+        if (storedDeviceId === testDeviceId) {
+          log('device-identity-output', 'Device ID verification successful');
+        } else {
+          log('device-identity-output', `Device ID mismatch: ${storedDeviceId} vs ${testDeviceId}`, false);
+        }
+        
+        log('device-identity-output', 'Device Identity Integration Test Complete');
+      } catch (error) {
+        log('device-identity-output', `Error: ${error.message}`, false);
+      } finally {
+        this.disabled = false;
+      }
+    });
+    
+    // Test 4: Simulated Token Refresh
+    document.getElementById('test-token-refresh').addEventListener('click', async function() {
+      clearLog('token-refresh-output');
+      this.disabled = true;
+      
+      try {
+        // Mock a JWT token
+        function createMockJwt(expireInSeconds = 3600) {
+          const header = btoa(JSON.stringify({ alg: 'HS256', typ: 'JWT' }));
+          const payload = btoa(JSON.stringify({ 
+            sub: 'test-user', 
+            exp: Math.floor(Date.now() / 1000) + expireInSeconds,
+            iat: Math.floor(Date.now() / 1000)
+          }));
+          const signature = btoa('test-signature');
+          
+          return `${header}.${payload}.${signature}`;
+        }
+        
+        // Set mock tokens
+        const mockAccessToken = createMockJwt(60); // 1 minute expiry
+        const mockRefreshToken = createMockJwt(3600); // 1 hour expiry
+        
+        // Extract expiry from mock token
+        const tokenParts = mockAccessToken.split('.');
+        const payload = JSON.parse(atob(tokenParts[1]));
+        const expiresAt = payload.exp * 1000; // Convert to milliseconds
+        
+        TokenManager.setTokens(mockAccessToken, mockRefreshToken, expiresAt);
+        log('token-refresh-output', 'Mock tokens set successfully');
+        
+        // Verify token format
+        const isValidFormat = TokenManager.validateTokenFormat(mockAccessToken);
+        log('token-refresh-output', `Token format validation: ${isValidFormat ? 'Success' : 'Failed'}`, isValidFormat);
+        
+        // Check expiration (should be soon but not expired)
+        const isExpired = TokenManager.isAccessTokenExpired();
+        log('token-refresh-output', `Token expired check: ${isExpired ? 'Token is expired or about to expire' : 'Token is still valid'}`);
+        
+        // This would normally trigger a refresh, but we'll just simulate it
+        log('token-refresh-output', 'Simulating token refresh...');
+        
+        // Create new mock tokens
+        const newMockAccessToken = createMockJwt(3600); // 1 hour expiry
+        const newMockRefreshToken = createMockJwt(86400); // 24 hour expiry
+        
+        // Extract new expiry
+        const newTokenParts = newMockAccessToken.split('.');
+        const newPayload = JSON.parse(atob(newTokenParts[1]));
+        const newExpiresAt = newPayload.exp * 1000; // Convert to milliseconds
+        
+        TokenManager.setTokens(newMockAccessToken, newMockRefreshToken, newExpiresAt);
+        log('token-refresh-output', 'Token refresh simulation successful');
+        
+        // Verify new tokens
+        const storedAccessToken = TokenManager.getAccessToken();
+        const storedRefreshToken = TokenManager.getRefreshToken();
+        
+        if (storedAccessToken === newMockAccessToken) {
+          log('token-refresh-output', 'New access token verification successful');
+        } else {
+          log('token-refresh-output', 'New access token verification failed', false);
+        }
+        
+        if (storedRefreshToken === newMockRefreshToken) {
+          log('token-refresh-output', 'New refresh token verification successful');
+        } else {
+          log('token-refresh-output', 'New refresh token verification failed', false);
+        }
+        
+        // Check if the new token is not expired
+        const isNewExpired = TokenManager.isAccessTokenExpired();
+        log('token-refresh-output', `New token expired check: ${isNewExpired ? 'Failed - new token should not be expired' : 'Success - new token is valid'}`, !isNewExpired);
+        
+        log('token-refresh-output', 'Token Refresh Test Complete');
+      } catch (error) {
+        log('token-refresh-output', `Error: ${error.message}`, false);
+      } finally {
+        this.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>

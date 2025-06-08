@@ -12,14 +12,17 @@ export { AUTH_CONFIG } from './auth/config';
 export { TokenStorage } from './auth/utils/token-storage';
 export { TokenUtil } from './auth/utils/token-util';
 export { DeviceIdentityService } from './auth/utils/device-identity-service';
-export { passwordValidator } from './auth/utils/password-validator';
+export { passwordValidator, passwordSchema } from './auth/utils/password-validator';
 
 // Service exports
 export { AuthService } from './auth/services/implementations/AuthService';
 export { TwoFactorAuthService } from './auth/services/implementations/TwoFactorAuthService';
 
+// Enum exports
+export { UserRole, TokenType, LoginStatus, TwoFactorMethod, AuthEventType } from './auth/enums';
+
 // Type exports
-export type { User, UserRole, LoginRequest, LoginResponse, RefreshTokenRequest, RefreshTokenResponse } 
+export type { User, LoginRequest, LoginResponse, RefreshTokenRequest, RefreshTokenResponse } 
   from './auth/services/models/auth-models';
 
 // Constants

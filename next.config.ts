@@ -6,8 +6,11 @@ import { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
-  swcMinify: true,
   output: 'standalone',
+  experimental: {
+    // For better chunk handling
+    optimizeCss: true,
+  },
   images: {
     domains: ['localhost'],
     remotePatterns: [
@@ -22,6 +25,18 @@ const nextConfig: NextConfig = {
   },
   typescript: {
     ignoreBuildErrors: process.env.NODE_ENV === 'production',
+  },
+  // Improve webpack configuration to handle chunks better
+  webpack: (config, { isServer }) => {
+    // Optimize for better chunk loading
+    config.optimization = {
+      ...config.optimization,
+      moduleIds: 'deterministic',
+      chunkIds: 'deterministic',
+    };
+    
+    // Return the modified config
+    return config;
   },
 };
 

@@ -14,3 +14,7 @@ export { passwordValidator } from './password-validator';
 
 // Device identity utilities
 export { DeviceIdentityService } from './device-identity-service';
+
+// Import device identity extension to add setDeviceId method
+import './device-identity-extension';
+export { deviceIdentity } from './device-identity';

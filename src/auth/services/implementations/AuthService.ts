@@ -15,13 +15,13 @@
 import { PrismaClient, User, RefreshToken } from '@prisma/client';
 import { IAuthService } from '../interfaces/IAuthService';
 import { LoginInput, RegisterInput, TokenPair, TokenPayload, AuthResult, PasswordChange, Device } from '../models/auth-models';
-import { UserRole, TokenType, TwoFactorMethod } from '../../index';
+import { UserRole, TokenType, TwoFactorMethod } from '../../enums';
 import { AUTH_CONFIG } from '@/auth';
 import { TokenUtil } from '@/auth';
 // Use browser-compatible bcrypt wrapper instead of importing directly
 import bcrypt from '../../utils/bcrypt-browser';
 import { v4 as uuidv4 } from 'uuid';
-import { PasswordValidator } from '../../utils/password-validator';
+import { passwordValidator } from '../../utils/password-validator';
 import { AuditLogger } from '../../../shared/services/audit-logger';
 import { ITwoFactorSetupResponse, ITwoFactorVerifyResponse } from '../interfaces/IAuthService';
 import prisma from '../../../lib/prisma';

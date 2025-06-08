@@ -8,15 +8,15 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { getSession } from '@/auth/services/utils/session-utils';
-import { deviceIdentityService } from '@/auth/utils/device-identity-service';
+import { deviceIdentity } from '@/auth/utils/device-identity';
 
 /**
  * GET handler for retrieving current user information
  */
 export async function GET() {  try {
-    // Initialize device identity service to ensure it's ready for token operations
+    // Initialize device identity system to ensure it's ready for token operations
     try {
-      const deviceId = await deviceIdentityService.initialize();
+      const deviceId = await deviceIdentity.init();
       console.log('Device identity initialized on /me endpoint:', {
         deviceIdPrefix: deviceId ? deviceId.substring(0, 8) + '...' : 'none'
       });
@@ -34,7 +34,7 @@ export async function GET() {  try {
         }
       }
     } catch (error) {
-      console.warn('Failed to initialize device identity service:', error);
+      console.warn('Failed to initialize device identity system:', error);
       // Continue anyway - this is not critical for the /me endpoint
     }
     
