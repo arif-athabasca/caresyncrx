@@ -14,6 +14,7 @@ const SecurityEventType = {
   LOGOUT: 'LOGOUT',
   PASSWORD_RESET: 'PASSWORD_RESET',
   PASSWORD_CHANGE: 'PASSWORD_CHANGE',
+  TOKEN_REFRESH: 'TOKEN_REFRESH',
   TWO_FACTOR_SETUP: 'TWO_FACTOR_SETUP',
   TWO_FACTOR_SUCCESS: 'TWO_FACTOR_SUCCESS',
   TWO_FACTOR_FAILURE: 'TWO_FACTOR_FAILURE',
@@ -62,7 +63,7 @@ async function logSecurityEvent(event) {
       data: {
         id: eventId,
         timestamp,
-        eventType: event.type,
+        eventType: event.type, // This maps to the eventType field in the schema
         severity: event.severity,
         userId: event.userId,
         username: event.username,
@@ -178,8 +179,7 @@ async function testSecurityAuditLogging() {
       metadata: { source: "Security test script", method: "TOTP", reason: "Invalid code" }
     });
     console.log(`   2FA verification failure log created with ID: ${twoFAFailureId}`);
-    
-    // Test password reset logging
+      // Test password reset logging
     console.log('7. Testing password reset logging...');
     const passwordResetId = await logSecurityEvent({
       type: SecurityEventType.PASSWORD_RESET,
@@ -192,8 +192,35 @@ async function testSecurityAuditLogging() {
     });
     console.log(`   Password reset log created with ID: ${passwordResetId}`);
     
+    // Test password change logging
+    console.log('8. Testing password change logging...');
+    const passwordChangeId = await logSecurityEvent({
+      type: SecurityEventType.PASSWORD_CHANGE,
+      severity: SecurityEventSeverity.INFO,
+      description: "Password changed for user test@example.com",
+      userId: "test-user-001",
+      username: "test@example.com",
+      ipAddress: "127.0.0.1",
+      userAgent: "Mozilla/5.0 Test Browser",
+      metadata: { source: "Security test script" }
+    });
+    console.log(`   Password change log created with ID: ${passwordChangeId}`);
+    
+    // Test token refresh logging
+    console.log('9. Testing token refresh logging...');
+    const tokenRefreshId = await logSecurityEvent({
+      type: SecurityEventType.TOKEN_REFRESH,
+      severity: SecurityEventSeverity.INFO,
+      description: "Tokens refreshed for user test@example.com",
+      userId: "test-user-001",
+      username: "test@example.com",
+      ipAddress: "127.0.0.1",
+      userAgent: "Mozilla/5.0 Test Browser",
+      metadata: { source: "Security test script", deviceId: "TEST-DEVICE-001" }
+    });    console.log(`   Token refresh log created with ID: ${tokenRefreshId}`);
+    
     // Test security policy change logging
-    console.log('8. Testing security policy change logging...');
+    console.log('10. Testing security policy change logging...');
     const policyChangeId = await logSecurityEvent({
       type: SecurityEventType.SECURITY_POLICY_CHANGE,
       severity: SecurityEventSeverity.WARNING,
@@ -207,8 +234,7 @@ async function testSecurityAuditLogging() {
     console.log(`   Policy change log created with ID: ${policyChangeId}`);
     
     // Verify the log count increased
-    const newLogCount = await prisma.securityAuditLog.count();
-    const logDifference = newLogCount - existingLogs;
+    const newLogCount = await prisma.securityAuditLog.count();    const logDifference = newLogCount - existingLogs;
     
     console.log(`\n${colors.green}Test completed successfully!${colors.reset}`);
     console.log(`Security logs before test: ${existingLogs}`);
@@ -216,10 +242,10 @@ async function testSecurityAuditLogging() {
     console.log(`New logs created: ${logDifference}`);
     
     // Check if the expected number of logs were created
-    if (logDifference >= 8) {
+    if (logDifference >= 10) {
       console.log(`\n${colors.green}✅ Security logging is working correctly!${colors.reset}`);
     } else {
-      console.log(`\n${colors.red}⚠️ Warning: Expected at least 8 new logs, but only ${logDifference} were created.${colors.reset}`);
+      console.log(`\n${colors.red}⚠️ Warning: Expected at least 10 new logs, but only ${logDifference} were created.${colors.reset}`);
       console.log(`This may indicate that some security logging functions are not working correctly.`);
     }
     

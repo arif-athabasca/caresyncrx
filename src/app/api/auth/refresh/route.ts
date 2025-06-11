@@ -12,6 +12,7 @@ import { authContainer } from '@/auth/services/container';
 import { AuditLogger } from '@/shared/services/audit-logger';
 import { TokenType } from '@/auth';
 import { TokenUtil } from '@/auth';
+import { AuthSecurityLogger } from '@/auth/services/utils/auth-security-logger';
 
 // Refresh token validation schema
 const refreshSchema = z.object({
@@ -107,11 +108,35 @@ export async function POST(request: NextRequest) {
     }
     
     // Get auth service
-    const authService = authContainer.getAuthService();
-    
-    try {
+    const authService = authContainer.getAuthService();    try {
       // Use the refreshTokens method from the auth service
       const { accessToken, refreshToken: newRefreshToken } = await authService.refreshTokens(refreshToken, deviceId);
+      
+      // Log token refresh to security audit log
+      try {
+        // Get user info from the token to log
+        const payload = TokenUtil.verifyToken(accessToken, TokenType.ACCESS) as any;
+        if (payload) {
+          await AuthSecurityLogger.log({
+            userId: payload.id,
+            username: payload.email,
+            ipAddress: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || '',
+            userAgent: request.headers.get('user-agent') || undefined,
+            path: request.nextUrl.pathname,
+            method: request.method,
+            action: 'TOKEN_REFRESH',
+            securityEventType: 'TOKEN_REFRESH' as any,
+            severity: 'INFO' as any,
+            description: `Tokens refreshed for user ${payload.email}`,
+            details: {
+              deviceId: deviceId || 'none',
+              tokenType: 'ACCESS'
+            }
+          });
+        }
+      } catch (logError) {
+        console.error('Failed to log token refresh:', logError);
+      }
       
       // Create response with tokens
       const response = NextResponse.json({

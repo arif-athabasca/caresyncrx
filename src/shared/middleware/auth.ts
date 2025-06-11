@@ -11,9 +11,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import * as jwt from 'jsonwebtoken';
 import { TokenType } from '../../auth';
 import { TokenUtil } from '../../auth/utils';
-import { AuditLogger } from '../services/audit-logger';
 import prisma from '../../lib/prisma';
 import { DeviceStatus } from '../../enums/device-status';
+import { SecurityEventType, SecurityEventSeverity } from '../services/security-audit';
 
 // Public paths that don't require authentication
 const PUBLIC_PATHS = [
@@ -179,7 +179,8 @@ async function updateSessionActivity(userId: string, sessionToken: string) {
       token: {
         contains: sessionToken.substring(sessionToken.length - 10)
       }
-    },    data: {
+    },    
+    data: {
       isValid: true
     }
   });
@@ -234,7 +235,8 @@ export async function authMiddleware(request: NextRequest) {
     const securityTier = getSecurityTierForPath(pathname);
 
     // Get additional user data for high security routes
-    if (isHighSecurityPath(pathname)) {      const userId = (payload as any).id;
+    if (isHighSecurityPath(pathname)) {      
+      const userId = (payload as any).id;
       const user = await prisma.user.findUnique({
         where: { id: userId },
         include: {
@@ -247,29 +249,38 @@ export async function authMiddleware(request: NextRequest) {
 
       if (!user) {
         throw new Error('User not found');
-      }      // Check if session is active and not expired
+      }      
+      
+      // Check if session is active and not expired
       const hasValidSession = user.refreshTokens.some(token => 
         token.token.includes(accessToken.substring(accessToken.length - 10)) && 
         new Date(token.expiresAt) > new Date() &&
         token.isValid
-      );
-
+      );      
+      
       if (!hasValidSession) {
         throw new Error('Session expired or invalid');
-      }      // For high security paths, verify this is a known device with active status
+      }
+      
+      // For high security paths, verify this is a known device with active status
       if (user.devices.length === 0 || user.devices[0].status !== DeviceStatus.ACTIVE) {
         // Log suspicious activity for unknown or inactive device
-        await AuditLogger.logSecurityEvent(
+        const { AuthSecurityLogger } = require('../../auth/services/utils/auth-security-logger');
+        await AuthSecurityLogger.log({
           userId,
-          'SUSPICIOUS_ACCESS',
-          {
-            path: pathname,
+          username: user.email,
+          ipAddress: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown',
+          userAgent: request.headers.get('user-agent') || undefined,
+          path: pathname,
+          method: request.method,
+          action: 'SUSPICIOUS_ACCESS',
+          securityEventType: SecurityEventType.ACCESS_DENIED,
+          severity: SecurityEventSeverity.WARNING,
+          description: `Suspicious access attempt from unknown or inactive device for user ${user.email}`,
+          details: {
             deviceId: (payload as any).deviceId,
-            timestamp: new Date(),
-            ipAddress: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown',
-            userAgent: request.headers.get('user-agent') || undefined
           }
-        );
+        });
 
         // For admin paths, reject untrusted devices entirely
         if (pathname.startsWith('/api/admin/')) {
@@ -285,7 +296,8 @@ export async function authMiddleware(request: NextRequest) {
     requestHeaders.set('x-user-role', (payload as any).role);
     
     // Check if session continuation is needed
-    const userId = (payload as any).id;    const sessionToken = accessToken;
+    const userId = (payload as any).id;    
+    const sessionToken = accessToken;
     const refreshToken = await prisma.refreshToken.findFirst({
       where: {
         userId,
@@ -296,7 +308,8 @@ export async function authMiddleware(request: NextRequest) {
       }
     });
 
-    if (refreshToken) {      const { idleRefreshNeeded, absoluteRefreshNeeded } = checkSessionRefreshNeeded(
+    if (refreshToken) {      
+      const { idleRefreshNeeded, absoluteRefreshNeeded } = checkSessionRefreshNeeded(
         refreshToken.createdAt,
         refreshToken.createdAt,
         securityTier
@@ -315,18 +328,24 @@ export async function authMiddleware(request: NextRequest) {
         headers: requestHeaders,
       }
     });
-  } catch (error) {    // Log authentication failure
-    await AuditLogger.logSecurityEvent(
-      'system',
-      'AUTH_FAILURE',
-      {
-        error: error instanceof Error ? error.message : 'Unknown error',
-        path: pathname,
-        timestamp: new Date(),
-        ipAddress: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown',
-        userAgent: request.headers.get('user-agent') || undefined
+  } catch (error) {
+    // Log authentication failure with specialized security logger
+    const { AuthSecurityLogger } = require('../../auth/services/utils/auth-security-logger');
+    await AuthSecurityLogger.log({
+      userId: undefined,
+      username: undefined,
+      ipAddress: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown',
+      userAgent: request.headers.get('user-agent') || undefined,
+      path: pathname,
+      method: request.method,
+      action: 'AUTH_FAILURE',
+      securityEventType: SecurityEventType.ACCESS_DENIED,
+      severity: SecurityEventSeverity.WARNING,
+      description: `Authentication failure: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      details: {
+        path: pathname
       }
-    );
+    });
     
     // Token is invalid or expired
     // For API routes, return 401

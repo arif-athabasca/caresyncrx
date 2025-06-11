@@ -17,3 +17,7 @@ export { deviceIdentity } from './device-identity';
 
 // Navigation state management
 export { NavigationStateManager } from './navigation-state-manager';
+
+// Token utilities - using require for JS files
+// @ts-ignore
+export const TokenUtil = require('./token-util');

@@ -71,17 +71,17 @@ export async function POST(req: NextRequest) {
 
       // In a real app, we would hash the new password
       const hashedPassword = await hash(password, 10);
-      console.log('[DEV] New hashed password:', hashedPassword);
-        // Log security event
-      await AuditLogger.logSecurityEvent(
-        'test-user', // In production this would be the real user ID
-        'PASSWORD_RESET_SUCCESS',
-        {
-          timestamp: new Date().toISOString(),
-          ipAddress: req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || 'unknown',
-          userAgent: req.headers.get('user-agent') || 'unknown'
-        }
-      );
+      console.log('[DEV] New hashed password:', hashedPassword);      // Log security event with the specialized AuthSecurityLogger
+      const { AuthSecurityLogger } = await import('@/auth/services/utils/auth-security-logger');
+      await AuthSecurityLogger.logPasswordResetComplete({
+        userId: 'test-user-001', // In production this would be the real user ID
+        username: 'test@example.com', // In production this would be the actual email
+        ipAddress: req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || 'unknown',
+        userAgent: req.headers.get('user-agent') || 'unknown',
+        path: req.nextUrl.pathname,
+        method: req.method,
+        details: { source: 'Password reset completion flow' }
+      });
 
       return NextResponse.json(
         { success: true, message: 'Password has been reset successfully' },

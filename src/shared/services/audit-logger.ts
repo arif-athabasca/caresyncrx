@@ -75,30 +75,7 @@ export class AuditLogger {
       // Never let audit logging failures bubble up and break application flow
       // But log that we failed to audit log (ironic, but necessary)
       console.error('Audit logging error:', error);
-    }
-  }
-  
-  /**
-   * Log a security event specifically
-   * 
-   * @param userId - User ID associated with the event
-   * @param eventType - Type of security event
-   * @param details - Additional event details
-   */
-  static async logSecurityEvent(
-    userId: string,
-    eventType: string,
-    details: Record<string, any>
-  ): Promise<void> {
-    return this.log({
-      userId,
-      action: `SECURITY_${eventType}`,
-      details: {
-        ...details,
-        resourceType: 'SECURITY',
-      }
-    });
-  }
+    }  }
   
   /**
    * Log a data access event (for HIPAA compliance)

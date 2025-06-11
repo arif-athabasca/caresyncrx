@@ -22,13 +22,13 @@ export enum SecurityEventSeverity {
 /**
  * Types of security events
  */
-export enum SecurityEventType {
-  // Authentication events
+export enum SecurityEventType {  // Authentication events
   LOGIN_SUCCESS = 'LOGIN_SUCCESS',
   LOGIN_FAILURE = 'LOGIN_FAILURE',
   LOGOUT = 'LOGOUT',
   PASSWORD_RESET = 'PASSWORD_RESET',
   PASSWORD_CHANGE = 'PASSWORD_CHANGE',
+  TOKEN_REFRESH = 'TOKEN_REFRESH',
   
   // 2FA events
   TWO_FACTOR_SETUP = 'TWO_FACTOR_SETUP',

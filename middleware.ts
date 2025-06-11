@@ -7,9 +7,10 @@
 
 import { NextResponse, NextRequest } from 'next/server';
 import { TokenType } from './src/auth';
-import { TokenUtil } from './src/auth/utils';
+import { TokenUtil } from './src/auth';
 import { applySecurityMiddleware } from './src/shared/middleware/security';
 import { getAuthCookies, setAuthCookies } from './src/shared/utils/cookie-util';
+import { logSecurityEvent, SecurityEventType, SecurityEventSeverity } from './src/shared/services/security-audit';
 
 // Public paths that don't require authentication
 const PUBLIC_PATHS = [
@@ -151,11 +152,42 @@ export async function middleware(request: NextRequest) {
     
     if (!payload) {
       console.error('Token validation failed: Payload is null');
+      // Log token verification failure
+      await logSecurityEvent({        type: SecurityEventType.ACCESS_DENIED,
+        severity: SecurityEventSeverity.WARNING,
+        ipAddress: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || '',
+        userAgent: request.headers.get('user-agent') || undefined,
+        path: pathname,
+        method: request.method,
+        description: 'Token validation failed: Payload is null',
+        metadata: { 
+          tokenPresent: !!accessToken,
+          fingerprintPresent: !!userFingerprint
+        }
+      });
       throw new Error('Invalid token');
     }
     
     // Log successful verification
-    console.log('Token verified successfully for user:', (payload as { email: string }).email);// Set user info in request headers for downstream use
+    console.log('Token verified successfully for user:', (payload as { email: string }).email);
+    
+    // Log token verification success to SecurityAuditLog
+    await logSecurityEvent({      type: SecurityEventType.LOGIN_SUCCESS,
+      severity: SecurityEventSeverity.INFO,
+      userId: (payload as { id: string }).id,
+      username: (payload as { email: string }).email,
+      ipAddress: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || '',
+      userAgent: request.headers.get('user-agent') || undefined,
+      path: pathname,
+      method: request.method,
+      description: `Token verified successfully for user: ${(payload as { email: string }).email}`,
+      metadata: { 
+        userRole: (payload as { role: string }).role,
+        tokenType: 'ACCESS'
+      }
+    });
+
+    // Set user info in request headers for downstream use
     const requestHeaders = new Headers(request.headers);
     requestHeaders.set('x-user-id', (payload as { id: string }).id);
     requestHeaders.set('x-user-email', (payload as { email: string }).email);
@@ -194,8 +226,7 @@ export async function middleware(request: NextRequest) {
     response.headers.set('Expires', '0');
     response.headers.set('Vary', 'Authorization, x-request-time, x-user-id'); // Vary header to prevent shared caching
     
-    return response;} catch (error) {
-    // Silence the error
+    return response;} catch (error) {    // Silence the error
     console.error('Token validation error:', error);
     
     // Log detailed debugging information
@@ -217,6 +248,22 @@ export async function middleware(request: NextRequest) {
       }
     };
     console.debug('Token debug info:', JSON.stringify(tokenDebug, null, 2));
+    
+    // Log token validation error to SecurityAuditLog
+    await logSecurityEvent({
+      type: SecurityEventType.ACCESS_DENIED,
+      severity: SecurityEventSeverity.WARNING,
+      ipAddress: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || '',
+      userAgent: request.headers.get('user-agent') || undefined,
+      path: pathname,
+      method: request.method,
+      description: 'Token validation error: ' + (error instanceof Error ? error.message : 'Unknown error'),
+      metadata: { 
+        tokenPresent: !!accessToken,
+        refreshTokenPresent: !!refreshToken,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      }
+    });
       
     // Check if there's a refresh token in the cookies or from the helper
     if (refreshToken) {

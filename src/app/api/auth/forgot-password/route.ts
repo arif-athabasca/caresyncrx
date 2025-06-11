@@ -55,19 +55,17 @@ export async function POST(req: NextRequest) {
 
     // For development/testing, we'll log and return success
     console.log(`[DEV] Password reset requested for: ${email}`);
-    
-    // Log security event 
+      // Log security event with the specialized AuthSecurityLogger
     // In production, we would use the user's ID here
-    await AuditLogger.logSecurityEvent(
-      'system', // No user ID yet since we're not authenticating
-      'PASSWORD_RESET_REQUEST',
-      { 
-        email,
-        timestamp: new Date().toISOString(),
-        ipAddress: req.headers.get('x-forwarded-for') || 'unknown',
-        userAgent: req.headers.get('user-agent') || 'unknown'
-      }
-    );
+    const { AuthSecurityLogger } = await import('@/auth/services/utils/auth-security-logger');
+    await AuthSecurityLogger.logPasswordResetRequest({
+      username: email,
+      ipAddress: req.headers.get('x-forwarded-for') || 'unknown',
+      userAgent: req.headers.get('user-agent') || 'unknown',
+      path: req.nextUrl.pathname,
+      method: req.method,
+      details: { source: 'Password reset request flow' }
+    });
 
     // Return successful response
     // In production, we would always return success to prevent email enumeration
