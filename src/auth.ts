@@ -18,7 +18,7 @@ export { AuthService } from './auth/services/implementations/AuthService';
 export { TwoFactorAuthService } from './auth/services/implementations/TwoFactorAuthService';
 
 // Enum exports
-export { UserRole, TokenType, LoginStatus, TwoFactorMethod, AuthEventType } from './auth/enums';
+export { UserRole, TokenType, LoginStatus, TwoFactorMethod, AuthEventType } from './enums';
 
 // Type exports
 export type { AuthTokens, UserCredentials, AuthResponse, UserProfile } 

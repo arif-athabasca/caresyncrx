@@ -5,17 +5,21 @@
  * Central export point for all enums to ensure consistent imports
  */
 
-/**
- * Enum defining the available user roles in the system.
- * These roles control access permissions throughout the application.
- */
-export enum UserRole {
-  DOCTOR = 'DOCTOR',
-  NURSE = 'NURSE',
-  PHARMACIST = 'PHARMACIST',
-  ADMIN = 'ADMIN',
-  PATIENT = 'PATIENT'
-}
-
+// Re-export all enums from their respective files
+export { UserRole } from './user-roles';
 export { DeviceStatus } from './device-status';
-// Add other enum exports as needed
+export { RxStatus } from './rx-status';
+export { NotificationType } from './notification-types';
+export { TokenType, AuthEventType, LoginStatus, TwoFactorMethod } from './auth-types';
+
+// Export default for compatibility with default imports
+export default {
+  UserRole: require('./user-roles').UserRole,
+  DeviceStatus: require('./device-status').DeviceStatus,
+  RxStatus: require('./rx-status').RxStatus,
+  NotificationType: require('./notification-types').NotificationType,
+  TokenType: require('./auth-types').TokenType,
+  AuthEventType: require('./auth-types').AuthEventType,
+  LoginStatus: require('./auth-types').LoginStatus,
+  TwoFactorMethod: require('./auth-types').TwoFactorMethod
+};

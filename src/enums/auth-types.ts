@@ -2,16 +2,21 @@
  * Copyright (c) 2025 CareSyncRx
  * MIT License
  * 
- * Re-export auth enums for easier imports
+ * Authentication enumerations for the CareSyncRx platform.
  */
 
-// Define enums directly to avoid module resolution issues
+/**
+ * Types of tokens used in the authentication system
+ */
 export enum TokenType {
   ACCESS = 'ACCESS',
   REFRESH = 'REFRESH',
   TEMP = 'TEMP'
 }
 
+/**
+ * Authentication event types for auditing and logging
+ */
 export enum AuthEventType {
   LOGIN = 'LOGIN',
   LOGOUT = 'LOGOUT',
@@ -25,6 +30,9 @@ export enum AuthEventType {
   TOKEN_REFRESH = 'TOKEN_REFRESH'
 }
 
+/**
+ * Login status codes returned from authentication attempts
+ */
 export enum LoginStatus {
   SUCCESS = 'SUCCESS',
   INVALID_CREDENTIALS = 'INVALID_CREDENTIALS',
@@ -34,26 +42,12 @@ export enum LoginStatus {
   PASSWORD_EXPIRED = 'PASSWORD_EXPIRED'
 }
 
+/**
+ * Two-factor authentication methods
+ */
 export enum TwoFactorMethod {
   TOTP = 'TOTP',
   SMS = 'SMS',
   EMAIL = 'EMAIL',
   BACKUP_CODE = 'BACKUP_CODE'
 }
-
-export enum UserRole {
-  DOCTOR = 'DOCTOR',
-  NURSE = 'NURSE',
-  PHARMACIST = 'PHARMACIST',
-  ADMIN = 'ADMIN',
-  PATIENT = 'PATIENT'
-}
-
-// Also export as default for backward compatibility
-export default {
-  UserRole,
-  TokenType,
-  AuthEventType,
-  LoginStatus,
-  TwoFactorMethod
-};

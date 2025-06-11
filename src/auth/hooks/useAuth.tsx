@@ -10,8 +10,8 @@
  */
 
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
-// Import directly from enums.ts to avoid circular dependencies
-import { UserRole } from '../enums';
+// Import from central enums directory
+import { UserRole } from '@/enums';
 import { deviceIdentity } from '../utils/device-identity';
 // Type definitions for window extensions are in auth-system.d.ts (imported implicitly)
 

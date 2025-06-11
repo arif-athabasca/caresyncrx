@@ -10,9 +10,13 @@
  * These roles control access permissions throughout the application.
  */
 export enum UserRole {
+  SUPER_ADMIN = 'SUDO',
+  ADMIN = 'ADMIN',
   DOCTOR = 'DOCTOR',
   NURSE = 'NURSE',
   PHARMACIST = 'PHARMACIST',
-  ADMIN = 'ADMIN',
-  PATIENT = 'PATIENT'
+  PATIENT = 'PATIENT',
+  CAREGIVER = 'CAREGIVER',
+  TECHNICIAN = 'TECHNICIAN',
+  GUEST = 'GUEST'
 }

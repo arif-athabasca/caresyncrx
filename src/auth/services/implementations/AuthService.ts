@@ -14,53 +14,20 @@
 
 import { PrismaClient, User, RefreshToken } from '@prisma/client';
 import { IAuthService } from '../interfaces/IAuthService';
-import { UserRole, TokenType, TwoFactorMethod } from '../../enums';
+import { UserRole, TokenType, TwoFactorMethod } from '@/enums';
 import { AUTH_CONFIG, TokenUtil } from '@/auth';
 
-// Import models from local types
-import type { AuthTokens, UserCredentials, AuthResponse, UserProfile } from '../models/auth-models';
-// Define required types for AuthService
-interface LoginInput {
-  email: string;
-  password: string;
-  deviceId?: string;
-  rememberMe?: boolean;
-}
-
-interface RegisterInput {
-  email: string;
-  password: string;
-  firstName?: string;
-  lastName?: string;
-}
-
-interface TokenPair {
-  accessToken: string;
-  refreshToken: string;
-  expiresAt: number;
-}
-
-interface TokenPayload {
-  id: string;
-  email: string;
-  role: UserRole;
-}
-
-interface AuthResult {
-  user: any;
-  tokens: TokenPair;
-}
-
-interface PasswordChange {
-  currentPassword: string;
-  newPassword: string;
-}
-
-interface Device {
-  id: string;
-  name: string;
-  lastUsed: Date;
-}
+// Import models from auth-models
+import { 
+  LoginInput, 
+  RegisterInput, 
+  TokenPair, 
+  TokenPayload,
+  AuthResult, 
+  PasswordChange, 
+  Device,
+  AuthUser
+} from '../models/auth-models';
 
 // Use browser-compatible bcrypt wrapper instead of importing directly
 import bcrypt from '../../utils/bcrypt-browser';
@@ -106,27 +73,30 @@ export class AuthService implements IAuthService {
     // Calculate password expiry date
     const passwordExpiresAt = new Date();
     passwordExpiresAt.setDate(passwordExpiresAt.getDate() + AUTH_CONFIG.PASSWORD.EXPIRY_DAYS);
-    
-    // Require clinic ID for registration
-    if (!data.clinicId) {
+      // Require clinic ID for registration
+    if (!data.clinicId && process.env.REQUIRE_CLINIC_ID === 'true') {
       throw new Error('Clinic ID is required for user registration');
+    }    // Create the user
+    const userData: any = {
+      id: uuidv4(),
+      email: data.email,
+      password: hashedPassword,
+      role: data.role ? (data.role === UserRole.PATIENT ? 'NURSE' as any : data.role as any) : 'GUEST' as any, // Convert PATIENT to NURSE since Prisma schema doesn't have PATIENT
+      twoFactorEnabled: false,
+      backupCodes: [],
+      passwordExpiresAt,
+      lastPasswordChange: new Date(),
+    };
+
+    // Only add clinic if clinicId is provided
+    if (data.clinicId) {
+      userData.clinic = {
+        connect: { id: data.clinicId }
+      };
     }
     
-    // Create the user
     const user = await prisma.user.create({
-      data: {
-        id: uuidv4(),
-        email: data.email,
-        password: hashedPassword,
-        role: data.role === UserRole.PATIENT ? 'NURSE' : data.role, // Convert PATIENT to NURSE since Prisma schema doesn't have PATIENT
-        twoFactorEnabled: false,
-        backupCodes: [],
-        passwordExpiresAt,
-        lastPasswordChange: new Date(),
-        clinic: {
-          connect: { id: data.clinicId }
-        }
-      }
+      data: userData
     });
     
     // Log the registration
@@ -138,15 +108,14 @@ export class AuthService implements IAuthService {
         resourceType: 'AUTH'
       }
     });
-    
-    // Generate tokens for the newly registered user
+      // Generate tokens for the newly registered user
     const tokenPayload: TokenPayload = {
       id: user.id,
       email: user.email,
       role: user.role as unknown as UserRole
     };
     
-    const tokens = TokenUtil.generateTokens(tokenPayload);
+    const tokens = TokenUtil.generateTokens(tokenPayload) as TokenPair;
     
     // Store refresh token
     await this.storeRefreshToken(user.id, tokens.refreshToken);
@@ -296,13 +265,13 @@ export class AuthService implements IAuthService {
         
         throw new Error('Invalid credentials');
       }
-      
-      // Check if 2FA is required
+        // Check if 2FA is required
       if (user.twoFactorEnabled) {
         // Generate a temporary token pair for 2FA flow
         const tempTokens: TokenPair = {
           accessToken: '', // Empty token since we're waiting for 2FA
-          refreshToken: '' // Empty token since we're waiting for 2FA
+          refreshToken: '', // Empty token since we're waiting for 2FA
+          expiresAt: 0 // Required by interface
         };
         
         return {
@@ -326,8 +295,7 @@ export class AuthService implements IAuthService {
           lockedUntil: null
         }
       });
-      
-      // Generate tokens
+        // Generate tokens
       const tokenPayload: TokenPayload = {
         id: user.id,
         email: user.email,
@@ -340,7 +308,7 @@ export class AuthService implements IAuthService {
         throw new Error('Authentication system error: Token generator unavailable');
       }
       
-      const tokens = TokenUtil.generateTokens(tokenPayload, credentials.deviceId);
+      const tokens = TokenUtil.generateTokens(tokenPayload, credentials.deviceId) as TokenPair;
       
       // Store refresh token
       await this.storeRefreshToken(user.id, tokens.refreshToken, credentials.deviceId);
@@ -493,13 +461,12 @@ export class AuthService implements IAuthService {
         
         // No error thrown - we're allowing the refresh despite the mismatch
       }
-      
-      // Generate new tokens
+        // Generate new tokens
       const newTokens = TokenUtil.generateTokens({
         id: storedToken.user.id,
         email: storedToken.user.email,
         role: storedToken.user.role as unknown as UserRole
-      }, deviceId);
+      }, deviceId) as TokenPair;
       
       // Invalidate old token and store new one
       await this.invalidateRefreshToken(refreshToken);
@@ -647,7 +614,6 @@ export class AuthService implements IAuthService {
       throw new Error('Failed to change password');
     }
   }
-
   /**
    * Verify a temporary token (e.g., for password reset)
    * 
@@ -656,7 +622,7 @@ export class AuthService implements IAuthService {
    */
   async verifyTempToken(token: string): Promise<string | null> {
     try {
-      const payload = TokenUtil.verifyToken(token, 'temp');
+      const payload = TokenUtil.verifyToken(token, TokenType.TEMP);
       
       if (!payload) {
         return null;
@@ -668,8 +634,7 @@ export class AuthService implements IAuthService {
       return null;
     }
   }
-  
-  /**
+    /**
    * Generate a temporary token for an operation
    * 
    * @param userId - The user ID for whom the token is generated
@@ -677,24 +642,47 @@ export class AuthService implements IAuthService {
    * @returns The generated temporary token
    */
   async generateTempToken(userId: string, deviceId?: string): Promise<string> {
-    // Get user to include necessary data in the token
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { email: true, role: true }
-    });
-    
-    if (!user) {
-      throw new Error('User not found');
-    }
+    try {
+      // Get user to include necessary data in the token
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { email: true, role: true }
+      });
+      
+      if (!user) {
+        throw new Error('User not found');
+      }
+      
       // Generate a temporary token with short expiry
-    const tokenPayload: TokenPayload = {
-      id: userId,
-      email: user.email,
-      role: user.role as unknown as UserRole
-    };
-    
-    const result = TokenUtil.generateTempToken(tokenPayload, deviceId);
-    return result.token;
+      const tokenPayload: TokenPayload = {
+        id: userId,
+        email: user.email,
+        role: user.role as unknown as UserRole
+      };
+      
+      // Use TokenUtil to generate the temporary token
+      const tempToken = TokenUtil.generateTempToken(tokenPayload, deviceId);
+      
+      if (!tempToken) {
+        throw new Error('Failed to generate temporary token');
+      }
+      
+      // Log temp token generation
+      await AuditLogger.log({
+        userId,
+        action: 'TEMP_TOKEN_GENERATED',
+        details: {
+          deviceId,
+          purpose: 'authentication_flow',
+          resourceType: 'AUTH'
+        }
+      });
+      
+      return tempToken;
+    } catch (error) {
+      console.error('Error generating temp token:', error);
+      throw new Error('Failed to generate temporary token');
+    }
   }
   
   /**
@@ -773,7 +761,7 @@ export class AuthService implements IAuthService {
         index === self.findIndex(d => d.deviceId === device.deviceId)
       );
       
-      return uniqueDevices;
+      return uniqueDevices as Device[];
     } catch (error) {
       console.error('Error getting user devices:', error);
       throw new Error('Failed to retrieve user devices');
@@ -837,10 +825,9 @@ export class AuthService implements IAuthService {
       if (!user) {
         throw new Error('User not found');
       }
-      
-      // Use the TwoFactorAuthService to generate setup data
+        // Use the TwoFactorAuthService to generate setup data
       const twoFactorService = new TwoFactorAuthService();
-      const setupResponse = await twoFactorService.generateSetup(userId, user.email);
+      const setupResponse = await twoFactorService.generateSetup(userId, user.email) as ITwoFactorSetupResponse;
       
       // Log the setup attempt
       await AuditLogger.log({
@@ -915,9 +902,8 @@ export class AuthService implements IAuthService {
       userAgent?: string;
     }
   ): Promise<ITwoFactorVerifyResponse> {
-    try {
-      // First, verify the temp token to get the user ID
-      const payload = TokenUtil.verifyToken(tempToken, TokenType.TEMP);
+    try {      // First, verify the temp token to get the user ID
+      const payload = TokenUtil.verifyToken(tempToken, TokenType.TEMP) as any;
       
       if (!payload || !payload.id || !payload.temp) {
         return { success: false };
@@ -974,7 +960,7 @@ export class AuthService implements IAuthService {
         twoFactorEnabled: true
       };
       
-      const tokens = TokenUtil.generateTokens(tokenPayload, options?.deviceId);
+      const tokens = TokenUtil.generateTokens(tokenPayload, options?.deviceId) as TokenPair;
       
       // Store refresh token
       await this.storeRefreshToken(user.id, tokens.refreshToken, options?.deviceId);

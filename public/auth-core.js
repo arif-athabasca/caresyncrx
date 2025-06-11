@@ -1,14 +1,9 @@
 /**
- * Auth Core Module - CONSOLIDATED VERSION
+ * Auth Core Module
  * 
  * This is the central module for authentication in CareSyncRx.
  * It provides a single source of truth for token management
  * and standardized token operations.
- * 
- * This file consolidates functionality from:
- * - auth-core.js (original)
- * - auth-core-fixed.js (deprecated)
- * - auth-core-new.js (development version)
  * 
  * Copyright (c) 2025 CareSyncRx
  * MIT License
@@ -506,7 +501,6 @@
      * This is needed for backward compatibility with backend services
      */
     bridgeToTokenUtil: function() {
-      // Ensures we can be detected by auth-diagnostics.js
       return true;
     }
   };

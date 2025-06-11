@@ -88,8 +88,46 @@
       
       // Start with a session check
       this._checkSession();
-      
-      return this;
+        return this;
+    },
+    
+    /**
+     * Check current session validity
+     */
+    _checkSession: function() {
+      try {
+        // Load user from session storage
+        this._loadUser();
+        
+        // If we have a user, check token validity
+        if (this._state.user) {
+          const tokenValid = !!window.AuthCore.getAccessToken() && !window.AuthCore.isTokenExpired();
+          
+          if (!tokenValid) {
+            console.log('Auth Session Manager: Token invalid during initial session check');
+            
+            // Try to refresh token
+            window.AuthCore.refreshToken()
+              .then(refreshSuccess => {
+                if (!refreshSuccess) {
+                  console.warn('Auth Session Manager: Token refresh failed during initial session check');
+                  // Clear invalid session
+                  this.clearUser();
+                }
+              })
+              .catch(error => {
+                console.error('Auth Session Manager: Error during token refresh in session check', error);
+                this.clearUser();
+              });
+          } else {
+            console.log('Auth Session Manager: Session check passed - user is authenticated');
+          }
+        } else {
+          console.log('Auth Session Manager: No user found in session storage');
+        }
+      } catch (error) {
+        console.error('Auth Session Manager: Error during session check', error);
+      }
     },
     
     /**
@@ -268,14 +306,13 @@
     
     /**
      * Clear the stored login redirect
-     */
-    clearLoginRedirect: function() {
+     */    clearLoginRedirect: function() {
       try {
         sessionStorage.removeItem(SESSION_KEYS.LOGIN_REDIRECT);
       } catch (e) {
         console.error('Auth Session Manager: Error clearing login redirect', e);
       }
-    }
+    },
     
     /**
      * Set the current user
@@ -313,23 +350,6 @@
         }));
       } catch (e) {
         console.error('Auth Session Manager: Error setting user', e);
-      }
-    },
-    
-    /**
-     * Clear the current user
-     */
-    clearUser: function() {
-      this._state.user = null;
-      
-      try {
-        // Clear user from session storage
-        sessionStorage.removeItem(SESSION_KEYS.USER);
-        
-        // Dispatch user cleared event
-        window.dispatchEvent(new CustomEvent('auth:user-cleared'));
-      } catch (e) {
-        console.error('Auth Session Manager: Error clearing user', e);
       }
     },
     

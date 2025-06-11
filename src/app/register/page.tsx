@@ -15,8 +15,8 @@ import { AuthInput } from '../components/auth/AuthInput';
 import { Button } from '../components/ui/Button';
 import { Alert } from '../components/ui/Alert';
 import { useAuth } from '../../auth/hooks/useAuth';
-import { UserRole } from '../../auth/enums';
-import { passwordSchema } from '../../auth/utils/password-validator';
+import { UserRole } from '../../enums'; // Importing directly from central enums directory
+import { passwordValidator } from '../../auth/utils/password-validator';
 
 export default function RegisterPage() {
   const { register, isLoading } = useAuth();
@@ -70,12 +70,10 @@ export default function RegisterPage() {
     } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
       newErrors.email = 'Email address is invalid';
     }
-    
-    // Validate password using schema
-    try {
-      passwordSchema.parse(formData.password);
-    } catch (err: any) {
-      newErrors.password = err.errors?.[0]?.message || 'Password does not meet requirements';
+      // Validate password using validator
+    const passwordValidation = passwordValidator(formData.password);
+    if (!passwordValidation.isValid) {
+      newErrors.password = passwordValidation.errors[0] || 'Password does not meet requirements';
     }
     
     // Validate password confirmation
@@ -231,8 +229,7 @@ export default function RegisterPage() {
         <div>
           <label htmlFor="role" className="block text-sm font-medium text-gray-700 mb-1">
             Role
-          </label>
-          <select
+          </label>          <select
             id="role"
             name="role"
             value={formData.role}
@@ -243,6 +240,11 @@ export default function RegisterPage() {
             <option value={UserRole.DOCTOR}>Doctor</option>
             <option value={UserRole.PHARMACIST}>Pharmacist</option>
             <option value={UserRole.ADMIN}>Administrator</option>
+            <option value={UserRole.PATIENT}>Patient</option>
+            <option value={UserRole.CAREGIVER}>Caregiver</option>
+            <option value={UserRole.TECHNICIAN}>Technician</option>
+            <option value={UserRole.GUEST}>Guest</option>
+            {/* Note: SUPER_ADMIN role is typically assigned by system administrators, not via self-registration */}
           </select>
         </div>
 

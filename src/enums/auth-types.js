@@ -1,12 +1,13 @@
-"use strict";
 /**
  * Copyright (c) 2025 CareSyncRx
  * MIT License
  * 
  * Authentication enumerations for the CareSyncRx platform.
  */
+
+"use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.UserRole = exports.TwoFactorMethod = exports.LoginStatus = exports.AuthEventType = exports.TokenType = void 0;
+exports.TwoFactorMethod = exports.LoginStatus = exports.AuthEventType = exports.TokenType = void 0;
 
 /**
  * Types of tokens used in the authentication system
@@ -59,15 +60,9 @@ var TwoFactorMethod;
     TwoFactorMethod["BACKUP_CODE"] = "BACKUP_CODE";
 })(TwoFactorMethod = exports.TwoFactorMethod || (exports.TwoFactorMethod = {}));
 
-/**
- * Enum defining the available user roles in the system.
- * These roles control access permissions throughout the application.
- */
-var UserRole;
-(function (UserRole) {
-    UserRole["DOCTOR"] = "DOCTOR";
-    UserRole["NURSE"] = "NURSE";
-    UserRole["PHARMACIST"] = "PHARMACIST";
-    UserRole["ADMIN"] = "ADMIN";
-    UserRole["PATIENT"] = "PATIENT";
-})(UserRole = exports.UserRole || (exports.UserRole = {}));
+exports.default = {
+    TokenType,
+    AuthEventType,
+    LoginStatus,
+    TwoFactorMethod
+};

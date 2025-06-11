@@ -7,7 +7,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { TokenType, UserRole } from '../../auth';
+import { TokenType, UserRole } from '../../enums'; // Import from central enums
 import { TokenUtil } from '../../auth/utils';
 import prisma from '../../lib/prisma';
 
@@ -21,8 +21,8 @@ const REQUIRE_2FA_PATHS = [
 
 // Roles that require 2FA for all actions
 const REQUIRE_2FA_ROLES = [
-  UserRole.ADMIN
-  // Note: SUPER_ADMIN doesn't exist in the UserRole enum
+  UserRole.ADMIN,
+  UserRole.SUPER_ADMIN // Using the newly defined SUPER_ADMIN role with value 'SUDO'
 ];
 
 /**

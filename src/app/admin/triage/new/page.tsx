@@ -12,7 +12,7 @@ import { useRouter } from 'next/navigation';
 import ClinicalLayout from '../../../components/layout/ClinicalLayout';
 import { Button } from '../../../components/ui/Button';
 import { useAuth } from '../../../../auth/hooks/useAuth';
-import { UserRole } from '@/auth';
+import { UserRole } from '@/enums';
 import { withRoleProtection } from '../../../../auth/components/withRoleProtection';
 import { Card } from '../components/TriageCard';
 import { Badge } from '../components/TriageBadge';
@@ -428,6 +428,6 @@ function NewTriagePage() {
 }
 
 export default withRoleProtection(NewTriagePage, {
-  allowedRoles: [UserRole.ADMIN, UserRole.DOCTOR],
+  allowedRoles: [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.DOCTOR],
   redirectTo: '/login?unauthorized=true&redirect=/admin/triage/new'
 });

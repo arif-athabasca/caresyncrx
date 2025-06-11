@@ -6,7 +6,7 @@
  */
 
 import { NextResponse, NextRequest } from 'next/server';
-import { TokenType } from './src/auth';
+import { TokenType } from './src/enums';
 import { TokenUtil } from './src/auth';
 import { applySecurityMiddleware } from './src/shared/middleware/security';
 import { getAuthCookies, setAuthCookies } from './src/shared/utils/cookie-util';

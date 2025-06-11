@@ -40,7 +40,6 @@ const AUTH_CONFIG = {
       ? parseInt(process.env.TEMP_TOKEN_EXPIRY_SECONDS, 10) 
       : 600
   },
-
   /**
    * Password security configuration
    */
@@ -60,6 +59,36 @@ const AUTH_CONFIG = {
     MIN_LENGTH: process.env.PASSWORD_MIN_LENGTH 
       ? parseInt(process.env.PASSWORD_MIN_LENGTH, 10) 
       : 12,
+    
+    /**
+     * Require uppercase letters in passwords
+     * Default: true
+     */
+    REQUIRE_UPPERCASE: process.env.PASSWORD_REQUIRE_UPPERCASE !== 'false',
+    
+    /**
+     * Require lowercase letters in passwords
+     * Default: true
+     */
+    REQUIRE_LOWERCASE: process.env.PASSWORD_REQUIRE_LOWERCASE !== 'false',
+    
+    /**
+     * Require numbers in passwords
+     * Default: true
+     */
+    REQUIRE_NUMBERS: process.env.PASSWORD_REQUIRE_NUMBERS !== 'false',
+    
+    /**
+     * Require special characters in passwords
+     * Default: true
+     */
+    REQUIRE_SPECIAL: process.env.PASSWORD_REQUIRE_SPECIAL !== 'false',
+    
+    /**
+     * Check against common passwords
+     * Default: true
+     */
+    CHECK_COMMON_PASSWORDS: process.env.PASSWORD_CHECK_COMMON !== 'false',
     
     /**
      * Number of days until a password expires and must be changed

@@ -10,13 +10,18 @@ declare global {
       isTokenValid: (timeBuffer?: number) => boolean;
       refreshToken: () => Promise<boolean>;
     };
-    
-    AuthSession: {
-      storeLoginRedirect: (path: string) => void;
+      AuthSession: {
+      getUser: () => any | null;
+      isAuthenticated: () => boolean;
+      loadUser: () => Promise<any | null>;
+      clearUser: () => void;
+      setUser: (user: any) => void;
+      logout: () => Promise<boolean>;
+      storeLoginRedirect: (path?: string) => void;
       getLoginRedirect: () => string | null;
       clearLoginRedirect: () => void;
-      handleLogin: (tokens: { accessToken: string, refreshToken: string }, expiresIn: number) => void;
-      handleLogout: (redirectToLogin?: boolean) => void;
+      redirectToLogin: (returnPath?: string) => void;
+      isSessionValid: () => boolean;
     };
     
     AuthInterceptor: {

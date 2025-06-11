@@ -13,9 +13,13 @@ exports.UserRole = void 0;
  */
 var UserRole;
 (function (UserRole) {
+    UserRole["SUPER_ADMIN"] = "SUDO";
+    UserRole["ADMIN"] = "ADMIN";
     UserRole["DOCTOR"] = "DOCTOR";
     UserRole["NURSE"] = "NURSE";
     UserRole["PHARMACIST"] = "PHARMACIST";
-    UserRole["ADMIN"] = "ADMIN";
     UserRole["PATIENT"] = "PATIENT";
+    UserRole["CAREGIVER"] = "CAREGIVER";
+    UserRole["TECHNICIAN"] = "TECHNICIAN";
+    UserRole["GUEST"] = "GUEST";
 })(UserRole || (exports.UserRole = UserRole = {}));

@@ -1,20 +1,20 @@
 # CareSyncRx Authentication and Security Documentation
 
-*Last Updated: June 10, 2025*
+*Last Updated: June 15, 2025*
 
 This comprehensive document covers the authentication system and security implementations in the CareSyncRx application.
 
 ## Table of Contents
 
 1. [Authentication System Overview](#authentication-system-overview)
-2. [Recent Authentication Fixes](#recent-authentication-fixes)
-3. [Security Architecture](#security-architecture)
-4. [Implementation Details](#implementation-details)
-5. [Token Management](#token-management)
-6. [Device Fingerprinting](#device-fingerprinting)
-7. [Cookie Management](#cookie-management)
-8. [Middleware Implementation](#middleware-implementation)
-9. [UI Components](#ui-components)
+2. [Security Architecture](#security-architecture)
+3. [Current Security Features](#current-security-features)
+4. [Token Management](#token-management)
+5. [Device Fingerprinting](#device-fingerprinting)
+6. [Cookie Management](#cookie-management)
+7. [Middleware Implementation](#middleware-implementation)
+8. [Two-Factor Authentication](#two-factor-authentication)
+9. [Rate Limiting](#rate-limiting)
 10. [Security Best Practices](#security-best-practices)
 11. [Testing and Validation](#testing-and-validation)
 12. [Future Recommendations](#future-recommendations)
@@ -37,6 +37,7 @@ The CareSyncRx authentication system uses a hybrid approach combining client-sid
 - **TokenUtil**: Service for generating and verifying JWT tokens
 - **Middleware**: NextJS middleware for route protection
 - **API Routes**: Endpoints for login, logout, refresh, and verification
+- **TwoFactorAuthService**: Service for managing 2FA setup and verification
 
 #### Storage Strategy
 
@@ -45,43 +46,6 @@ Authentication uses a multi-layered storage approach:
 - Local storage as fallback for specific scenarios
 - Device fingerprinting for enhanced security
 
-## Recent Authentication Fixes
-
-*June 10, 2025*
-
-The following issues were fixed in the authentication system:
-
-1. **Token Verification Failures**: Fixed issues with JWT token verification in middleware
-2. **Cookie Handling**: Improved cookie management to ensure tokens are properly stored and retrieved
-3. **Fingerprint Tracking**: Added device fingerprinting for enhanced security and consistent token verification
-4. **Diagnostics**: Created diagnostic tools to help debug future authentication issues
-5. **Logout Button**: Fixed missing logout button in the UI
-
-### Changes Made
-
-#### Middleware Improvements
-
-- Enhanced token verification in `middleware.ts` to use fingerprinting for added security
-- Improved error handling with detailed logging of token issues
-- Added consistent fingerprint generation and storage in cookies
-- Fixed proper extraction of tokens from various sources (cookies, headers)
-
-#### Cookie Utility
-
-Created a dedicated cookie utility (`src/shared/utils/cookie-util.ts`) that provides:
-
-- Consistent cookie parsing and management
-- Helper functions for getting and setting auth cookies
-- Support for both client and server-side cookie access
-- Proper cookie security settings (httpOnly, sameSite, secure)
-
-#### UI Improvements
-
-- Added a persistent logout button to the main application layout
-- Implemented a dedicated `LogoutButton` component for consistent logout behavior
-- Updated the logout flow to properly clear cookies and local storage
-- Fixed the logout API endpoint to clear all auth-related cookies
-
 ## Security Architecture
 
 The CareSyncRx application implements a comprehensive security architecture:
@@ -89,46 +53,45 @@ The CareSyncRx application implements a comprehensive security architecture:
 1. **Authentication**: JWT-based authentication with proper token management
 2. **Authorization**: Role-based access control for different user types
 3. **Data Protection**: Encryption for sensitive data
-4. **API Security**: Rate limiting and input validation
-5. **Security Headers**: Proper HTTP security headers
-6. **CSRF Protection**: Protection against cross-site request forgery
-7. **Audit Logging**: Comprehensive security event logging
+4. **API Security**: Advanced rate limiting and input validation
+5. **Two-Factor Authentication**: TOTP-based 2FA with backup codes
+6. **Security Headers**: Proper HTTP security headers
+7. **CSRF Protection**: Protection against cross-site request forgery
+8. **Audit Logging**: Comprehensive security event logging
 
-## Implementation Details
+## Current Security Features
 
-### JWT Token Structure
+### 1. Rate Limiting and Protection
 
-```javascript
-{
-  "id": "user-uuid",
-  "email": "user@example.com",
-  "role": "DOCTOR",
-  "clinicId": "clinic-uuid",
-  "fingerprint": "device-fingerprint-hash",
-  "iat": 1685432000,
-  "exp": 1685435600,
-  "type": "ACCESS"
-}
-```
+The application implements a robust rate limiting system to protect against brute force attacks and API abuse:
 
-### Authentication Flow
+- IP-based rate limiting on authentication endpoints (10 requests per 15 minutes)
+- Rate limiting for 2FA verification (5 requests per 5 minutes)
+- API rate limiting for mutations (30 requests per minute) and reads (60 requests per minute)
+- Account lockout mechanism after failed login attempts
+- Distributed rate limiting with Redis (falls back to in-memory storage if Redis is unavailable)
+- Separate configurations for different endpoint sensitivities
 
-1. **Login**: User submits credentials to `/api/auth/login`
-2. **Token Generation**: Server validates credentials and generates access and refresh tokens
-3. **Token Storage**: Tokens are stored in HTTP-only cookies
-4. **Token Verification**: Middleware verifies token validity on protected routes
-5. **Token Refresh**: Client automatically refreshes tokens when needed
-6. **Logout**: Tokens are invalidated and cookies cleared
+### 2. Two-Factor Authentication
 
-### Role-Based Access Control
+A complete two-factor authentication system is implemented with the following features:
 
-Access control is implemented using role-based permissions:
+- TOTP-based 2FA implementation using the speakeasy library
+- QR code generation for easy setup with authenticator apps
+- Backup codes for account recovery
+- Mandatory 2FA for sensitive operations and admin roles
+- Support for multiple 2FA methods (TOTP with plans for SMS and Email)
+- Rate limiting of 2FA verification attempts
 
-- **ADMIN**: Full system access
-- **DOCTOR**: Patient and prescription management
-- **NURSE**: Patient data view and limited updates
-- **PATIENT**: Personal information and prescriptions only
-- **PHARMACY**: Prescription fulfillment and inventory
+### 3. Audit Logging
+
+Comprehensive logging of security events:
+
+- Detailed authentication event logging
+- Security audit trail for suspicious activities
+- Login attempt tracking with IP and device information
+- Token usage and refresh logging
+- 2FA setup and verification attempts
 
 ## Token Management
 
@@ -149,6 +112,21 @@ const tokens = TokenUtil.generateTokens(userPayload, deviceFingerprint);
 ```javascript
 // Verify token with appropriate type and fingerprint
 const payload = TokenUtil.verifyToken(accessToken, TokenType.ACCESS, userFingerprint);
+```
+
+### JWT Token Structure
+
+```javascript
+{
+  "id": "user-uuid",
+  "email": "user@example.com",
+  "role": "DOCTOR",
+  "clinicId": "clinic-uuid",
+  "fingerprint": "device-fingerprint-hash",
+  "iat": 1685432000,
+  "exp": 1685435600,
+  "type": "ACCESS"
+}
 ```
 
 ## Device Fingerprinting
@@ -198,35 +176,69 @@ The NextJS middleware handles authentication for protected routes:
 - Extracts tokens from cookies or headers
 - Verifies token validity and type
 - Checks device fingerprint
+- Enforces mandatory 2FA where required
 - Redirects to login for invalid tokens
 - Applies security headers
 
-## UI Components
+## Two-Factor Authentication
 
-### LogoutButton Component
+The application implements TOTP-based two-factor authentication:
 
-A reusable component for consistent logout behavior across the application:
+### Setup Process
 
-```jsx
-export default function LogoutButton({ className = '', redirectPath = '' }) {
-  const router = useRouter();
-  const [isLoggingOut, setIsLoggingOut] = useState(false);
+1. User initiates 2FA setup from account settings
+2. System generates a secret key and QR code
+3. User scans QR code with authenticator app
+4. User verifies setup by entering a code from the app
+5. System enables 2FA and provides backup codes
 
-  const handleLogout = async () => {
-    // Call logout API and handle redirection
-    // Clear client-side storage
-  };
-  
-  return (
-    <button
-      onClick={handleLogout}
-      className={`logout-button ${className}`}
-    >
-      {isLoggingOut ? 'Logging out...' : 'Logout'}
-    </button>
-  );
-}
-```
+### Verification Process
+
+1. User logs in with username and password
+2. System challenges user for 2FA code
+3. User enters code from authenticator app
+4. System verifies code and completes authentication
+5. Backup codes can be used if authenticator is unavailable
+
+### Backup Codes
+
+- 10 single-use backup codes are generated during setup
+- Codes are formatted as XXXXX-XXXXX for readability
+- Used codes are immediately invalidated
+- Users can regenerate backup codes if needed
+
+### Mandatory 2FA
+
+- Enforced for administrative users (ADMIN, SUPER_ADMIN)
+- Required for sensitive operations
+- Configured through environment variables
+
+## Rate Limiting
+
+The rate limiting system provides protection against abuse:
+
+### Implementation Details
+
+- Distributed rate limiting using Redis
+- In-memory fallback when Redis is unavailable
+- IP-based rate limiting for anonymous requests
+- Combined user+IP rate limiting for authenticated requests
+- Different limits for different endpoint types
+
+### Rate Limit Configurations
+
+- **Authentication**: 10 requests per 15 minutes
+- **Two-Factor Authentication**: 5 requests per 5 minutes
+- **API Mutations**: 30 requests per minute
+- **API Reads**: 60 requests per minute
+- **Token Refresh**: 5 requests per 10 minutes
+
+### Protection Mechanisms
+
+- Account lockout after 10 failed login attempts in 30 minutes
+- IP blocking for suspicious activity
+- Graduated response to repeated failures
+- Comprehensive logging of rate limit events
 
 ## Security Best Practices
 
@@ -242,19 +254,14 @@ The application follows these security best practices:
    - Client-side validation for UX
    - Sanitization of user inputs
 
-3. **Rate Limiting**:
-   - IP-based rate limiting on authentication endpoints
-   - Account lockout after failed attempts
-   - Graduated response to suspicious activity
-
-4. **Security Headers**:
+3. **Security Headers**:
    - Content-Security-Policy
    - X-XSS-Protection
    - X-Content-Type-Options
    - Referrer-Policy
    - Strict-Transport-Security
 
-5. **Secure Defaults**:
+4. **Secure Defaults**:
    - Conservative permissions
    - Least privilege principle
    - Defense in depth approach
@@ -265,7 +272,8 @@ The authentication system has been tested with:
 
 - Unit tests for token generation and verification
 - Integration tests for authentication flow
-- Real-world scenario testing
+- Rate limit testing under load conditions
+- Two-factor authentication flow testing
 - Security audits and penetration testing
 
 ## Future Recommendations
@@ -276,12 +284,11 @@ The authentication system has been tested with:
    - Add JTI (JWT ID) for token revocation
 
 2. **Security Enhancements**:
-   - Add rate limiting to authentication endpoints
-   - Implement comprehensive auth flow logging
-   - Consider adding two-factor authentication for sensitive operations
-   - Regular security audits and penetration testing
+   - Implement real-time security analytics dashboard
+   - Conduct regular penetration testing (quarterly)
+   - Consider hardware security key support (WebAuthn/FIDO2)
 
 3. **Monitoring and Alerting**:
-   - Real-time monitoring of authentication failures
-   - Alerts for suspicious activities
-   - Regular review of security logs
+   - Enhance real-time monitoring of authentication failures
+   - Implement automated security alerts for suspicious patterns
+   - Create scheduled security report generation

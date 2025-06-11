@@ -15,7 +15,7 @@ import { AuthInput } from '../components/auth/AuthInput';
 import { Button } from '../components/ui/Button';
 import { Alert } from '../components/ui/Alert';
 import { useAuth } from '../../auth/hooks/useAuth';
-import { UserRole } from '@/auth';
+import { UserRole } from '@/enums';
 
 // Loading fallback component
 function LoadingLogin() {

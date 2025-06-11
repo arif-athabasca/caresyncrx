@@ -9,10 +9,10 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import * as jwt from 'jsonwebtoken';
-import { TokenType } from '../../auth';
+import { TokenType } from '@/enums';
 import { TokenUtil } from '../../auth/utils';
 import prisma from '../../lib/prisma';
-import { DeviceStatus } from '../../enums/device-status';
+import { DeviceStatus } from '@/enums';
 import { SecurityEventType, SecurityEventSeverity } from '../services/security-audit';
 
 // Public paths that don't require authentication

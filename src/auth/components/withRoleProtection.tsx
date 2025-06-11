@@ -10,8 +10,8 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../hooks/useAuth';
-// Import UserRole directly from the enums file
-import { UserRole } from '../enums';
+// Import UserRole from the central enums directory
+import { UserRole } from '@/enums';
 
 type WithRoleProtectionProps = {
   allowedRoles: UserRole[];

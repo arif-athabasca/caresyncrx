@@ -9,7 +9,7 @@
 
 import { useEffect, useState } from 'react';
 import { useAuth } from '../../auth/hooks/useAuth';
-import { UserRole } from '@/auth';
+import { UserRole } from '@/enums';
 import { Card, MetricCard } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import ClinicalLayout from '../components/layout/ClinicalLayout';

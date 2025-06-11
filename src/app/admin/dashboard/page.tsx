@@ -16,8 +16,8 @@ import { Badge } from '@/app/components/ui/Badge';
 import { Tabs, TabPanel } from '@/app/components/ui/Tabs';
 import ClinicalLayout from '@/app/components/layout/ClinicalLayout';
 import { useRouter, useSearchParams } from 'next/navigation';
-// Direct import from the enums file
-import { UserRole } from '@/auth';
+// Import from the central enums directory
+import { UserRole } from '@/enums';
 import { withRoleProtection } from '@/auth/components/withRoleProtection';
 
 // Define BadgeVariant type to match the Badge component's accepted values
@@ -429,6 +429,6 @@ function ReportsTab() {
 
 // Export the component wrapped with role protection
 export default withRoleProtection(AdminDashboardPage, {
-  allowedRoles: [UserRole.ADMIN],
+  allowedRoles: [UserRole.ADMIN, UserRole.SUPER_ADMIN],
   redirectTo: '/login'
 });
