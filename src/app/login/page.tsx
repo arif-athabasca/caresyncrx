@@ -182,9 +182,23 @@ function LoginContent() {
         }
         
         router.replace(`${targetPath}?t=${timestamp}`);
-      }
-    } catch (err) {
+      }      } catch (err) {
       console.error('Login error:', err);
+      
+      // Enhanced error logging for authentication failures
+      if (typeof window !== 'undefined' && window.console && window.console.error) {
+        console.error('Authentication error details:', {
+          message: err instanceof Error ? err.message : 'Unknown error',
+          email: formData.email.substring(0, 3) + '***', // Log partial email for debugging
+          timestamp: new Date().toISOString(),
+          deviceInfo: {
+            userAgent: navigator.userAgent.substring(0, 100),
+            hasAuthCore: typeof window.AuthCore !== 'undefined',
+            hasAuthSession: typeof window.AuthSession !== 'undefined',
+            hasLocalStorage: typeof localStorage !== 'undefined'
+          }
+        });
+      }
       
       // Handle specific error messages from the API
       if (err instanceof Error) {

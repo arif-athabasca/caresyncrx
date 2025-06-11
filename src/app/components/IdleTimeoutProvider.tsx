@@ -16,7 +16,6 @@ import { useIdleTimeout } from '../../auth/hooks/useIdleTimeout';
 import { AUTH_CONFIG } from '../../auth/config/auth-config';
 import { useAuth } from '../../auth/hooks/useAuth';
 import { useRouter } from 'next/navigation';
-import { TokenStorage } from '../../auth/utils/token-storage';
 
 interface IdleTimeoutProviderProps {
   children: ReactNode;
@@ -49,8 +48,10 @@ export function IdleTimeoutProvider({
     } catch (error) {
       console.error('Error handling idle timeout:', error);
       
-      // Force clear tokens as a fallback
-      TokenStorage.clearTokens();
+      // Force clear tokens as a fallback using the new auth system
+      if (typeof window !== 'undefined' && window.AuthCore) {
+        window.AuthCore.clearTokens();
+      }
       
       // Fallback redirect
       router.replace('/login?timeout=true&error=logout&t=' + Date.now());
@@ -59,8 +60,14 @@ export function IdleTimeoutProvider({
   
   // Activity handler
   const handleActivity = useCallback(() => {
-    // Update activity timestamp on any user activity
-    TokenStorage.updateLastActivity();
+    // Update activity timestamp on any user activity using the new auth system
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('lastActivity', Date.now().toString());
+      } catch (e) {
+        console.warn('Could not update activity timestamp:', e);
+      }
+    }
   }, []);
   
   // Only track idle timeout for authenticated users
@@ -74,7 +81,14 @@ export function IdleTimeoutProvider({
   useEffect(() => {
     if (isAuthenticated) {
       resetIdleTimer();
-      TokenStorage.updateLastActivity();
+      // Update activity timestamp using the new auth system
+      if (typeof window !== 'undefined') {
+        try {
+          localStorage.setItem('lastActivity', Date.now().toString());
+        } catch (e) {
+          console.warn('Could not update activity timestamp:', e);
+        }
+      }
     }
   }, [isAuthenticated, resetIdleTimer]);
   

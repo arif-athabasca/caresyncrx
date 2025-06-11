@@ -10,28 +10,31 @@ import { authContainer } from '@/auth/services/container';
 import { AuditLogger } from '@/shared/services/audit-logger';
 import { TokenType } from '@/auth';
 import { TokenUtil } from '@/auth';
+import { clearAuthCookies, getAuthCookies } from '@/shared/utils/cookie-util';
 
 /**
  * Handle user logout requests
  */
 export async function POST(request: NextRequest) {
   try {
-    // Get the access token from cookies or header
-    const accessToken = request.cookies.get('accessToken')?.value || 
+    // Get all auth cookies
+    const cookies = getAuthCookies(request);
+    const accessToken = cookies.accessToken || 
                       request.headers.get('authorization')?.replace('Bearer ', '');
     
     if (!accessToken) {
-      return NextResponse.json({ message: 'Already logged out' }, { status: 200 });
-    }    // Verify the token to get user information
+      const response = NextResponse.json({ message: 'Already logged out' }, { status: 200 });
+      return clearAuthCookies(response); // Clear cookies anyway just to be safe
+    }
+    
+    // Verify the token to get user information
     const payload = TokenUtil.verifyToken<{ id: string; email: string }>(accessToken, TokenType.ACCESS);
     
     if (!payload) {
       // Clear cookies even if token is invalid
       const response = NextResponse.json({ message: 'Logged out successfully' }, { status: 200 });
-      response.cookies.delete('accessToken');
-      response.cookies.delete('isAuthenticated');
-      return response;
-    }    // Get refreshToken from request body if provided
+      return clearAuthCookies(response);
+    }// Get refreshToken from request body if provided
     let refreshToken;
     try {
       const body = await request.json();
@@ -68,14 +71,9 @@ export async function POST(request: NextRequest) {
         // Continue even if refresh token invalidation fails
         console.warn('Failed to invalidate refresh token:', err);
       }
-    }
-
-    // Clear auth cookies
+    }    // Clear auth cookies
     const response = NextResponse.json({ message: 'Logged out successfully' }, { status: 200 });
-    response.cookies.delete('accessToken');
-    response.cookies.delete('isAuthenticated');
-    
-    return response;
+    return clearAuthCookies(response);
   } catch (error) {
     console.error('Logout error:', error);
     
@@ -85,9 +83,6 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     );
     
-    response.cookies.delete('accessToken');
-    response.cookies.delete('isAuthenticated');
-    
-    return response;
+    return clearAuthCookies(response);
   }
 }

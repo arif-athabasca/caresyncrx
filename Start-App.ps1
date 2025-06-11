@@ -12,15 +12,15 @@ $PORT = 3001
 # Check if port is in use
 Write-Host "Checking if port $PORT is already in use..." -ForegroundColor Yellow
 $portInUse = $false
-$pid = $null
+$processId = $null
 
 try {
     $connections = netstat -ano | findstr ":$PORT"
     if ($connections -match "LISTENING") {
         $portInUse = $true
         # Extract PID
-        $pid = ($connections -split ' ')[-1]
-        $pid = $pid.Trim()
+        $processId = ($connections -split ' ')[-1]
+        $processId = $processId.Trim()
     }
 }
 catch {
@@ -28,15 +28,15 @@ catch {
 }
 
 # If process found, try to kill it
-if ($portInUse -and $pid) {
-    Write-Host "Port $PORT is in use by process ID $pid. Attempting to terminate..." -ForegroundColor Yellow
+if ($portInUse -and $processId) {
+    Write-Host "Port $PORT is in use by process ID $processId. Attempting to terminate..." -ForegroundColor Yellow
     try {
-        Stop-Process -Id $pid -Force
+        Stop-Process -Id $processId -Force
         Write-Host "Process terminated successfully." -ForegroundColor Green
     }
     catch {
         Write-Host "Failed to terminate process: $_" -ForegroundColor Red
-        Write-Host "Please manually terminate the process using the PID $pid." -ForegroundColor Yellow
+        Write-Host "Please manually terminate the process using the PID $processId." -ForegroundColor Yellow
     }
     
     # Small delay to ensure the port is fully released

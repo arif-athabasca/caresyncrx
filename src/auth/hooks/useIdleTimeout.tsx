@@ -11,7 +11,6 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from './useAuth';
-import { TokenStorage } from '../utils/token-storage';
 // Import directly from auth-config to avoid circular dependencies
 import { AUTH_CONFIG } from '../config/auth-config';
 
@@ -35,6 +34,23 @@ interface IdleTimeoutOptions {
 }
 
 /**
+ * Updates the last activity timestamp using AuthCore if available, falling back to localStorage
+ */
+const updateLastActivity = () => {
+  try {
+    // Use AuthCore if available
+    if (typeof window !== 'undefined' && window.AuthCore && typeof window.AuthCore.updateLastActivity === 'function') {
+      window.AuthCore.updateLastActivity();
+    } else {
+      // Fallback to direct localStorage update
+      localStorage.setItem('lastActivity', Date.now().toString());
+    }
+  } catch (e) {
+    console.warn('Error updating activity timestamp:', e);
+  }
+};
+
+/**
  * Hook for managing user session idle timeout
  * @param options Configuration options for idle timeout
  * @returns Object containing idle timeout state and methods
@@ -49,12 +65,23 @@ export function useIdleTimeout(options?: IdleTimeoutOptions) {
 
   /**
    * Check if the user's session has timed out
-   */
-  const checkIdleStatus = useCallback(() => {
+   */  const checkIdleStatus = useCallback(() => {
     if (!isAuthenticated) return;
     
     // Check for timeout in localStorage
-    const localStorageTimedOut = TokenStorage.isSessionTimedOut();
+    let localStorageTimedOut = false;
+    try {
+      const lastActivity = localStorage.getItem('lastActivity');
+      if (lastActivity) {
+        const lastActivityTime = parseInt(lastActivity, 10);
+        localStorageTimedOut = (Date.now() - lastActivityTime) > idleTimeoutMs;
+      } else {
+        // No activity record means we should consider it timed out
+        localStorageTimedOut = true;
+      }
+    } catch (e) {
+      console.warn('Error checking localStorage for activity:', e);
+    }
     
     // Also check for the lastActivity cookie which is set by middleware
     let cookieTimedOut = false;
@@ -80,12 +107,11 @@ export function useIdleTimeout(options?: IdleTimeoutOptions) {
   /**
    * Handle user activity by updating the last activity timestamp
    * and resetting the timeout timer
-   */
-  const handleUserActivity = useCallback(() => {
+   */  const handleUserActivity = useCallback(() => {
     if (!isAuthenticated) return;
     
-    // Update last activity timestamp
-    TokenStorage.updateLastActivity();
+    // Update last activity timestamp in localStorage
+    updateLastActivity();
     
     // Call onActivity callback if provided
     if (options?.onActivity) {
@@ -108,7 +134,7 @@ export function useIdleTimeout(options?: IdleTimeoutOptions) {
     if (!isAuthenticated) return;
     
     // Initialize last activity timestamp
-    TokenStorage.updateLastActivity();
+    updateLastActivity();
     
     // Set up event listeners
     ACTIVITY_EVENTS.forEach(event => {

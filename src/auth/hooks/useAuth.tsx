@@ -6,14 +6,14 @@
  * 
  * Authentication context and hook for the CareSyncRx platform.
  * This provides authentication state management and auth methods throughout the application.
+ * Updated to use the new auth system with window.AuthCore, window.AuthSession, and window.AuthInterceptor.
  */
 
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 // Import directly from enums.ts to avoid circular dependencies
 import { UserRole } from '../enums';
-import { TokenStorage } from '../utils/token-storage';
 import { deviceIdentity } from '../utils/device-identity';
-// Type definitions for window extensions are in window-auth.d.ts (imported implicitly)
+// Type definitions for window extensions are in auth-system.d.ts (imported implicitly)
 
 // Define user data structure
 interface User {
@@ -59,6 +59,7 @@ interface AuthProviderProps {
 /**
  * Authentication Provider Component
  * Wraps the application and provides authentication state and methods to all children
+ * Updated to use the new auth system
  */
 export function AuthProvider({ children }: AuthProviderProps) {
   // Authentication state
@@ -66,7 +67,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [isInitialized, setIsInitialized] = useState<boolean>(false);
-  const [refreshErrorCount, setRefreshErrorCount] = useState<number>(0);
 
   /**
    * Reset auth state and redirect to login
@@ -75,34 +75,22 @@ export function AuthProvider({ children }: AuthProviderProps) {
     // Clear user state
     setUser(null);
     
-    // Use the unified TokenManager for clearing tokens
-    if (window.TokenManager) {
-      window.TokenManager.clearTokens();
-    } else {
-      // Fallback to the original TokenStorage
-      TokenStorage.clearTokens();
-    }
-    
-    // Clear any in-progress flags
-    if (typeof sessionStorage !== 'undefined') {
-      sessionStorage.removeItem('refreshInProgress');
+    // Use the new AuthCore for clearing tokens
+    if (typeof window !== 'undefined' && window.AuthCore) {
+      window.AuthCore.clearTokens();
     }
     
     // Store return path if provided
-    if (returnPath && typeof window !== 'undefined') {
-      if (window.TokenManager) {
-        window.TokenManager.storeNavigationState(returnPath);
-      } else {
-        TokenStorage.storeNavigationState(returnPath);
-      }
+    if (returnPath && typeof window !== 'undefined' && window.AuthSession) {
+      window.AuthSession.storeLoginRedirect(returnPath);
     }
     
-    // Use AuthNavigation if available, otherwise fall back to direct redirect
-    if (window.AuthNavigation) {
-      window.AuthNavigation.redirectToLogin(returnPath);
-    } else if (typeof window !== 'undefined' && !window.location.pathname.includes('/login')) {
-      const redirectQuery = returnPath ? `?redirect=${encodeURIComponent(returnPath)}` : '';
-      window.location.href = `/login${redirectQuery}`;
+    // Use AuthSession to redirect to login
+    if (typeof window !== 'undefined' && window.AuthSession) {
+      window.AuthSession.redirectToLogin(returnPath);
+    } else if (typeof window !== 'undefined') {
+      // Fallback if AuthSession is not available
+      window.location.href = `/login${returnPath ? `?redirect=${encodeURIComponent(returnPath)}` : ''}`;
     }
   }, []);
 
@@ -110,122 +98,61 @@ export function AuthProvider({ children }: AuthProviderProps) {
    * Handle token refresh when access token expires
    */
   const handleTokenRefresh = useCallback(async (): Promise<boolean> => {
+    if (typeof window === 'undefined') return false;
+    
     try {
-      // If AuthNavigation is available, use it for token refresh
-      if (window.AuthNavigation) {
-        try {
-          await window.AuthNavigation.refreshToken();
-          
-          // Fetch user data with new token
-          const userResponse = await fetch('/api/auth/me', {
-            headers: {
-              'Cache-Control': 'private, max-age=0, must-revalidate',
-              'Pragma': 'no-cache',
-              'Expires': '0'
-            },
-            credentials: 'include'
-          });
-          
-          if (userResponse.ok) {
-            const userData = await userResponse.json();
-            setUser(userData.user);
+      // Use the new AuthCore for token refresh
+      if (window.AuthCore && window.AuthCore.refreshToken) {
+        console.log('Attempting token refresh with AuthCore');
+        await window.AuthCore.refreshToken();
+        
+        // Wait a moment for tokens to be properly stored
+        await new Promise(resolve => setTimeout(resolve, 50));
+        
+        // Use AuthSession to load user data
+        if (window.AuthSession) {
+          const userData = await window.AuthSession.loadUser();
+          if (userData) {
+            setUser(userData as User);
             return true;
           }
-          
-          return false;
-        } catch (error) {
-          console.error('Token refresh failed using AuthNavigation:', error);
-          
-          // Get current path for return after login
-          const currentPath = typeof window !== 'undefined' ? 
-            window.location.pathname + window.location.search : '';
-            
-          // Use our reset function to handle this scenario
-          resetAuthAndRedirect(currentPath);
-          return false;
         }
-      }
-      
-      // Fall back to the original refresh logic if AuthNavigation is not available
-      // Simplified for this version
-      console.log('Attempting token refresh with stored token');
-      
-      // Try to get refresh token from storage utility
-      const storedRefreshToken = window.TokenManager 
-        ? window.TokenManager.getRefreshToken() 
-        : TokenStorage.getRefreshToken();
-      
-      if (!storedRefreshToken) {
-        console.warn('No refresh token available');
+        
+        // Fallback: fetch user data directly
+        const userResponse = await fetch('/api/auth/me', {
+          headers: {
+            'Cache-Control': 'no-cache',
+            'X-Request-Source': 'auth-refresh-verification'
+          },
+          credentials: 'include'
+        });
+        
+        if (userResponse.ok) {
+          const userData = await userResponse.json();
+          setUser(userData.user);
+          return true;
+        }
+        
+        console.warn('User data fetch failed after token refresh:', userResponse.status);
         return false;
       }
       
-      // Get device ID
-      let deviceId: string | null = null;
-      try {
-        deviceId = await deviceIdentity.getDeviceId();
-      } catch (e) {
-        console.warn('Error getting device ID:', e);
-        deviceId = window.TokenManager ? window.TokenManager.getDeviceId() : TokenStorage.getDeviceId();
-      }
-      
-      // Call refresh endpoint
-      const response = await fetch('/api/auth/refresh', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Cache-Control': 'no-cache'
-        },
-        body: JSON.stringify({
-          refreshToken: storedRefreshToken,
-          deviceId: deviceId || undefined,
-        }),
-        credentials: 'include'
-      });
-        
-      if (!response.ok) {
-        console.error('Token refresh failed:', response.status);
-        
-        // If refresh failed, clear auth state
-        setUser(null);
-        if (window.TokenManager) {
-          window.TokenManager.clearTokens();
-        } else {
-          TokenStorage.clearTokens();
-        }
-        
-        return false;
-      }
-        
-      const data = await response.json();
-      
-      // Store new tokens using the available utility
-      if (window.TokenManager) {
-        window.TokenManager.setTokens(
-          data.tokens.accessToken,
-          data.tokens.refreshToken,
-          Date.now() + (15 * 60 * 1000) // Default to 15 minutes
-        );
-      } else {
-        TokenStorage.setRefreshToken(data.tokens.refreshToken);
-        TokenStorage.setAccessToken(data.tokens.accessToken);
-        TokenStorage.updateLastActivity();
-      }
-      
-      // Reset error count on successful refresh
-      setRefreshErrorCount(0);
-      
-      return true;
+      console.warn('AuthCore not available for token refresh');
+      return false;
     } catch (err) {
       console.error('Token refresh error:', err);
-      setRefreshErrorCount(prev => prev + 1);
       return false;
     }
-  }, [refreshErrorCount, resetAuthAndRedirect]);
+  }, []);
 
   // Check if user is authenticated on initial load  
   useEffect(() => {
     const initializeAuth = async () => {
+      if (typeof window === 'undefined') {
+        setIsLoading(false);
+        return;
+      }
+      
       try {
         setIsLoading(true);
         
@@ -233,20 +160,57 @@ export function AuthProvider({ children }: AuthProviderProps) {
         console.log('Initializing device identity system');
         await deviceIdentity.init();
         
-        // Get user data
-        const response = await fetch('/api/auth/me', {
-          credentials: 'include',
-          headers: {
-            'Cache-Control': 'no-cache'
+        // Use AuthSession to get user data if available
+        if (window.AuthSession) {
+          // Check if already authenticated in the session
+          if (window.AuthSession.isAuthenticated()) {
+            const userData = await window.AuthSession.loadUser();
+            if (userData) {
+              setUser(userData as User);
+              console.log('Auth initialization: User loaded from AuthSession');
+              setIsLoading(false);
+              setIsInitialized(true);
+              return;
+            }
           }
-        });
+        }
         
-        if (response.ok) {
-          const userData = await response.json();
-          setUser(userData.user);
-        } else if (response.status === 401) {
-          // Token expired or invalid, try to refresh
-          await handleTokenRefresh();
+        // Check if we have valid tokens with AuthCore
+        if (window.AuthCore) {
+          const isValid = window.AuthCore.isTokenValid();
+          
+          if (!isValid && window.AuthCore.getRefreshToken()) {
+            // Token expired but we have a refresh token, try to refresh
+            console.log('Auth initialization: Token expired, attempting refresh');
+            const refreshSuccess = await handleTokenRefresh();
+            if (refreshSuccess) {
+              console.log('Auth initialization: Token refresh successful');
+              setIsLoading(false);
+              setIsInitialized(true);
+              return;
+            }
+          }
+        }
+        
+        // Fallback to direct API call
+        try {
+          const response = await fetch('/api/auth/me', {
+            credentials: 'include',
+            headers: {
+              'Cache-Control': 'no-cache',
+              'X-Request-Source': 'auth-initialization'
+            }
+          });
+          
+          if (response.ok) {
+            const userData = await response.json();
+            setUser(userData.user);
+            console.log('Auth initialization: User loaded from API');
+          } else {
+            console.log('Auth initialization: Not authenticated');
+          }
+        } catch (error) {
+          console.warn('Auth initialization: Error fetching user data', error);
         }
       } catch (err) {
         console.error('Auth initialization error:', err);
@@ -299,27 +263,27 @@ export function AuthProvider({ children }: AuthProviderProps) {
         return data;
       }
       
-      // Store tokens using the appropriate utility
-      if (window.TokenManager) {
-        window.TokenManager.setTokens(
+      // Store tokens using the AuthCore
+      if (typeof window !== 'undefined' && window.AuthCore) {
+        window.AuthCore.setTokens(
           data.tokens.accessToken,
           data.tokens.refreshToken,
           Date.now() + (15 * 60 * 1000) // Default to 15 minutes
         );
-        
-        // Store device ID if available
-        if (deviceId) {
-          window.TokenManager.setDeviceId(deviceId);
+      }
+      
+      // Store device ID if available
+      if (deviceId && typeof window !== 'undefined' && window.localStorage) {
+        try {
+          window.localStorage.setItem('deviceId', deviceId);
+        } catch (e) {
+          console.warn('Error storing device ID:', e);
         }
-      } else {
-        TokenStorage.setAccessToken(data.tokens.accessToken);
-        TokenStorage.setRefreshToken(data.tokens.refreshToken);
-        TokenStorage.updateLastActivity();
-        
-        // Store device ID if available
-        if (deviceId) {
-          TokenStorage.setDeviceId(deviceId);
-        }
+      }
+      
+      // Store user data in AuthSession if available
+      if (typeof window !== 'undefined' && window.AuthSession) {
+        window.AuthSession.setUser(data.user);
       }
       
       setUser(data.user);
@@ -359,17 +323,18 @@ export function AuthProvider({ children }: AuthProviderProps) {
       
       const data = await response.json();
       
-      // Store tokens
-      if (window.TokenManager) {
-        window.TokenManager.setTokens(
+      // Store tokens using AuthCore
+      if (typeof window !== 'undefined' && window.AuthCore) {
+        window.AuthCore.setTokens(
           data.tokens.accessToken,
           data.tokens.refreshToken,
           Date.now() + (15 * 60 * 1000) // Default to 15 minutes
         );
-      } else {
-        TokenStorage.setAccessToken(data.tokens.accessToken);
-        TokenStorage.setRefreshToken(data.tokens.refreshToken);
-        TokenStorage.updateLastActivity();
+      }
+      
+      // Store user in AuthSession
+      if (typeof window !== 'undefined' && window.AuthSession) {
+        window.AuthSession.setUser(data.user);
       }
       
       setUser(data.user);
@@ -424,25 +389,27 @@ export function AuthProvider({ children }: AuthProviderProps) {
       
       const data = await response.json();
       
-      // Store tokens
-      if (window.TokenManager) {
-        window.TokenManager.setTokens(
+      // Store tokens using AuthCore
+      if (typeof window !== 'undefined' && window.AuthCore) {
+        window.AuthCore.setTokens(
           data.tokens.accessToken,
           data.tokens.refreshToken,
           Date.now() + (15 * 60 * 1000) // Default to 15 minutes
         );
-        
-        if (deviceId) {
-          window.TokenManager.setDeviceId(deviceId);
+      }
+      
+      // Store device ID if available
+      if (deviceId && typeof window !== 'undefined' && window.localStorage) {
+        try {
+          window.localStorage.setItem('deviceId', deviceId);
+        } catch (e) {
+          console.warn('Error storing device ID:', e);
         }
-      } else {
-        TokenStorage.setAccessToken(data.tokens.accessToken);
-        TokenStorage.setRefreshToken(data.tokens.refreshToken);
-        TokenStorage.updateLastActivity();
-        
-        if (deviceId) {
-          TokenStorage.setDeviceId(deviceId);
-        }
+      }
+      
+      // Store user in AuthSession
+      if (typeof window !== 'undefined' && window.AuthSession) {
+        window.AuthSession.setUser(data.user);
       }
       
       setUser(data.user);
@@ -463,21 +430,19 @@ export function AuthProvider({ children }: AuthProviderProps) {
     try {
       setIsLoading(true);
       
-      // Use the AuthLogout system if available
-      if (window.AuthLogout) {
-        await window.AuthLogout.logout();
+      // Use the AuthSession for logout
+      if (typeof window !== 'undefined' && window.AuthSession) {
+        await window.AuthSession.logout();
       } else {
-        // Otherwise perform a standard logout
+        // Fallback for direct API call
         await fetch('/api/auth/logout', {
           method: 'POST',
           credentials: 'include'
         });
         
-        // Clear tokens and state
-        if (window.TokenManager) {
-          window.TokenManager.clearTokens();
-        } else {
-          TokenStorage.clearTokens();
+        // Clear tokens with AuthCore
+        if (typeof window !== 'undefined' && window.AuthCore) {
+          window.AuthCore.clearTokens();
         }
       }
       
@@ -492,10 +457,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
       console.error('Logout error:', error);
       
       // Ensure tokens and state are cleared even if the API call fails
-      if (window.TokenManager) {
-        window.TokenManager.clearTokens();
-      } else {
-        TokenStorage.clearTokens();
+      if (typeof window !== 'undefined') {
+        if (window.AuthCore) window.AuthCore.clearTokens();
+        if (window.AuthSession) window.AuthSession.clearUser();
       }
       
       setUser(null);
@@ -517,6 +481,24 @@ export function AuthProvider({ children }: AuthProviderProps) {
     deviceId?: string
   ): Promise<{ accessToken: string; refreshToken: string }> => {
     try {
+      // Try to use AuthCore first
+      if (typeof window !== 'undefined' && window.AuthCore && window.AuthCore.refreshToken) {
+        console.log('Using AuthCore for manual token refresh');
+        await window.AuthCore.refreshToken();
+        
+        // Get tokens from AuthCore
+        const accessToken = window.AuthCore.getAccessToken() || '';
+        const newRefreshToken = window.AuthCore.getRefreshToken() || '';
+        
+        if (accessToken && newRefreshToken) {
+          return { 
+            accessToken,
+            refreshToken: newRefreshToken
+          };
+        }
+      }
+      
+      // Fallback to direct API call
       const response = await fetch('/api/auth/refresh', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -531,17 +513,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
       
       const data = await response.json();
       
-      // Store tokens
-      if (window.TokenManager) {
-        window.TokenManager.setTokens(
+      // Store tokens using AuthCore
+      if (typeof window !== 'undefined' && window.AuthCore) {
+        window.AuthCore.setTokens(
           data.tokens.accessToken,
           data.tokens.refreshToken,
           Date.now() + (15 * 60 * 1000) // Default to 15 minutes
         );
-      } else {
-        TokenStorage.setAccessToken(data.tokens.accessToken);
-        TokenStorage.setRefreshToken(data.tokens.refreshToken);
-        TokenStorage.updateLastActivity();
       }
       
       return data.tokens;

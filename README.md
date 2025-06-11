@@ -24,11 +24,30 @@ You can start editing the page by modifying `app/page.tsx`. The page auto-update
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
+## Authentication System
+
+CareSyncRx uses a hybrid authentication system:
+
+- **Frontend Authentication**: Uses the new auth system with `auth-core.js`, `auth-session.js`, and `auth-interceptor.js` scripts
+- **Backend Authentication**: Uses the `TokenUtil` utility for token generation and verification
+
+Recent updates:
+- The auth system has been completely redesigned and rebuilt for better reliability
+- The navigation and session management systems have been improved
+- TokenUtil has been restored to support backend authentication services
+- Device fingerprinting for enhanced security and consistent token verification
+- Fixed issues with logout functionality and UI components
+
+See the comprehensive documentation in `docs/authentication-and-security.md` for complete details.
+
 ## Security Features
 
 CareSyncRx implements multiple layers of security:
 
 - **Security Headers**: Protection against common web vulnerabilities
+- **Authentication System**: Hybrid approach with frontend using auth-core.js and backend using TokenUtil
+- **Token Management**: Secure token storage and validation
+- **Two-Factor Authentication**: Optional 2FA for sensitive accounts
 - **Content Type Validation**: Ensures appropriate request content types
 - **CSRF Protection**: Defends against Cross-Site Request Forgery attacks
 - **Input/Output Sanitization**: Prevents XSS and injection attacks
@@ -38,7 +57,7 @@ CareSyncRx implements multiple layers of security:
 - **Comprehensive Security Logging**: Dual-logging system for security events
 - **Security Audit Reports**: Generates detailed reports with actionable insights
 
-For more details, see the [comprehensive security guide](./docs/security-guide.md), [security logging documentation](./docs/security-logging.md), [security testing documentation](./docs/security-testing.md) and [middleware README](./src/shared/middleware/README.md).
+For more details, see the [comprehensive authentication and security documentation](./docs/authentication-and-security.md).
 
 ### Security Tools
 
@@ -64,22 +83,7 @@ CareSyncRx features a robust authentication system:
 - **Browser Navigation Handling**: Proper handling of back/forward navigation
 - **Role-Based Access Control**: Protection of routes based on user roles
 
-For more information, see the [authentication system documentation](./docs/auth-system/README.md).
-
-### Authentication Testing
-
-The system includes several tools for testing the authentication system:
-
-```bash
-# Run a comprehensive authentication test suite
-./Test-AuthSystem.ps1 -Full
-
-# Run only integration tests
-./Test-AuthSystem.ps1 -Integration
-
-# Run only real-world flow tests
-./Test-AuthSystem.ps1 -RealWorld
-```
+The new authentication system has been completely rebuilt to address persistent issues and provide a cleaner, more maintainable architecture.
 
 ## Learn More
 

@@ -9,6 +9,7 @@ import { NextResponse, NextRequest } from 'next/server';
 import { TokenType } from './src/auth';
 import { TokenUtil } from './src/auth/utils';
 import { applySecurityMiddleware } from './src/shared/middleware/security';
+import { getAuthCookies, setAuthCookies } from './src/shared/utils/cookie-util';
 
 // Public paths that don't require authentication
 const PUBLIC_PATHS = [
@@ -55,12 +56,44 @@ function isPublicPath(pathname: string): boolean {
  * Helper function to extract tokens from request
  */
 function getTokensFromRequest(request: NextRequest) {
-  const accessToken = request.cookies.get('accessToken')?.value || 
+  // Use our cookie utility to get auth cookies
+  const cookies = getAuthCookies(request);
+  
+  // Get access token from cookies or authorization header
+  const accessToken = cookies.accessToken || 
                      request.headers.get('authorization')?.replace('Bearer ', '');
-  const refreshToken = request.cookies.get('refreshToken')?.value ||
-                      request.cookies.get('authRefreshToken')?.value;
+  
+  // Get refresh token from any possible cookie source
+  const refreshToken = cookies.refreshToken || cookies.authRefreshToken;
   
   return { accessToken, refreshToken };
+}
+
+/**
+ * Helper function to generate a fingerprint for the current request
+ * This helps provide additional security by binding tokens to the device/browser
+ */
+function generateFingerprint(request: NextRequest): string {
+  // Use a combination of headers that help identify the client
+  const headers = [
+    request.headers.get('user-agent') || 'unknown',
+    request.headers.get('accept-language') || 'unknown',
+    request.headers.get('sec-ch-ua') || '',
+    request.headers.get('sec-ch-ua-platform') || ''
+  ];
+  
+  // Create a simple hash from these values
+  const fingerprint = headers.join('|');
+  let hash = 0;
+  
+  for (let i = 0; i < fingerprint.length; i++) {
+    const char = fingerprint.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash; // Convert to 32-bit integer
+  }
+  
+  // Return hexadecimal representation
+  return Math.abs(hash).toString(16);
 }
 
 /**
@@ -109,12 +142,20 @@ export async function middleware(request: NextRequest) {
     url.searchParams.set('redirect', pathname);
     return NextResponse.redirect(url);
   }  try {
-    // Verify token
-    const payload = TokenUtil.verifyToken(accessToken, TokenType.ACCESS);
+    // Get user's fingerprint from cookies or generate a new one
+    const userFingerprint = request.cookies.get('deviceFingerprint')?.value || 
+                            generateFingerprint(request);
+    
+    // Verify token with fingerprint
+    const payload = TokenUtil.verifyToken(accessToken, TokenType.ACCESS, userFingerprint);
     
     if (!payload) {
+      console.error('Token validation failed: Payload is null');
       throw new Error('Invalid token');
-    }    // Set user info in request headers for downstream use
+    }
+    
+    // Log successful verification
+    console.log('Token verified successfully for user:', (payload as { email: string }).email);// Set user info in request headers for downstream use
     const requestHeaders = new Headers(request.headers);
     requestHeaders.set('x-user-id', (payload as { id: string }).id);
     requestHeaders.set('x-user-email', (payload as { email: string }).email);
@@ -135,6 +176,16 @@ export async function middleware(request: NextRequest) {
       httpOnly: false // Need client access for idle timeout
     });
     
+    // Store the fingerprint in a cookie for future requests
+    const fingerprint = generateFingerprint(request);
+    response.cookies.set('deviceFingerprint', fingerprint, {
+      path: '/',
+      sameSite: 'strict',
+      secure: process.env.NODE_ENV === 'production',
+      httpOnly: true,
+      maxAge: 60 * 60 * 24 * 30 // 30 days
+    });
+    
     // Set optimized cache-control headers for browser history navigation
     // Allow browser caching but require revalidation
     // This enables back/forward navigation while ensuring content freshness
@@ -145,7 +196,29 @@ export async function middleware(request: NextRequest) {
     
     return response;} catch (error) {
     // Silence the error
-    console.error('Token validation error:', error);      // Check if there's a refresh token in the cookies or from the helper
+    console.error('Token validation error:', error);
+    
+    // Log detailed debugging information
+    const tokenDebug = {
+      accessToken: accessToken ? {
+        length: accessToken.length,
+        prefix: accessToken.substring(0, 10) + '...',
+        suffix: '...' + accessToken.substring(accessToken.length - 10)
+      } : null,
+      refreshToken: refreshToken ? {
+        length: refreshToken.length,
+        prefix: refreshToken.substring(0, 10) + '...',
+        suffix: '...' + refreshToken.substring(refreshToken.length - 10)
+      } : null,
+      headers: {
+        userAgent: request.headers.get('user-agent')?.substring(0, 50) + '...',
+        acceptLanguage: request.headers.get('accept-language'),
+        authorization: request.headers.get('authorization') ? 'Present' : 'Missing'
+      }
+    };
+    console.debug('Token debug info:', JSON.stringify(tokenDebug, null, 2));
+      
+    // Check if there's a refresh token in the cookies or from the helper
     if (refreshToken) {
       // For non-API routes, allow the request to continue and rely on client-side refresh
       if (!pathname.startsWith('/api/')) {

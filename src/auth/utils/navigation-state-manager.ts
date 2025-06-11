@@ -6,8 +6,6 @@
  * This provides utilities to track and restore navigation state during auth flows
  */
 
-import { TokenStorage } from './token-storage';
-
 /**
  * Time window in milliseconds to consider navigation events as part of the same session
  * This helps with browser back/forward button handling
@@ -18,7 +16,8 @@ const NAV_TIME_WINDOW_MS = 60 * 1000; // 1 minute
  * Navigation state manager - provides methods for tracking and restoring
  * navigation state during authentication flows
  */
-export const NavigationStateManager = {  /**
+export const NavigationStateManager = {  
+  /**
    * Track a navigation event with enhanced context
    * @param path The current path including search params
    */
@@ -31,9 +30,19 @@ export const NavigationStateManager = {  /**
         path.includes('/login') || 
         path.includes('/register') || 
         path.includes('/api/auth/');
-      
-      // Store current path in TokenStorage
-      TokenStorage.storeNavigationState(path);
+        // Store current path in localStorage for the auth system
+      try {
+        if (typeof window !== 'undefined' && window.AuthCore) {
+          window.AuthCore.storeAuthState(path);
+        } else if (typeof window !== 'undefined' && window.AuthSession) {
+          window.AuthSession.storeLoginRedirect(path);
+        } else {
+          // Fallback to storing in sessionStorage
+          sessionStorage.setItem('lastNavPath', path);
+        }
+      } catch (e) {
+        console.warn('Error storing navigation state:', e);
+      }
       
       // Get existing navigation history
       const navHistory = sessionStorage.getItem('navigationHistory');
@@ -71,7 +80,16 @@ export const NavigationStateManager = {  /**
     try {
       if (typeof sessionStorage === 'undefined') return null;
       
-      // First check for explicitly stored authenticated path
+      // First check with new AuthSession API if available
+      if (typeof window !== 'undefined' && window.AuthSession) {
+        const redirectPath = window.AuthSession.getLoginRedirect();
+        if (redirectPath) {
+          console.log('Using AuthSession stored path:', redirectPath);
+          return redirectPath;
+        }
+      }
+      
+      // Otherwise fall back to our stored path
       const lastAuthPath = sessionStorage.getItem('lastAuthenticatedPath');
       if (lastAuthPath) {
         console.log('Using explicitly stored authenticated path:', lastAuthPath);
@@ -125,7 +143,7 @@ export const NavigationStateManager = {  /**
       return null;
     }
   },
-    /**
+  /**
    * Check if a token refresh is needed during navigation
    * Enhanced with additional heuristics and improved timing checks
    */
@@ -158,14 +176,18 @@ export const NavigationStateManager = {  /**
           // If navigation was very recent (within 2 seconds) and token is nearing expiry
           // This helps with rapid back/forward navigation
           if (Date.now() - navTimestamp < 2000) {
-            const tokenTimestamp = TokenStorage.getAccessTokenTimestamp();
-            if (tokenTimestamp) {
+            // Use the new AuthCore API if available
+            if (typeof window !== 'undefined' && window.AuthCore) {
               // If token is more than 80% through its lifetime, refresh preemptively
-              const tokenAge = Date.now() - tokenTimestamp;
-              const tokenLifetime = 1000 * 60 * 15; // 15 minutes in milliseconds
-              if (tokenAge > (tokenLifetime * 0.8)) {
-                console.log('Refresh needed: Recent navigation with aging token');
-                return true;
+              try {
+                const isValid = window.AuthCore.isTokenValid(180); // Check with 3 minute buffer
+                if (!isValid) {
+                  console.log('Refresh needed: Recent navigation with aging token');
+                  return true;
+                }
+              } catch (error) {
+                console.error('Error checking token validity:', error);
+                return true; // Default to needing refresh on error
               }
             }
           }
@@ -173,11 +195,22 @@ export const NavigationStateManager = {  /**
       }
       
       // Finally, check if access token is definitely expired
-      const isExpired = TokenStorage.isAccessTokenExpired();
-      if (isExpired) {
-        console.log('Refresh needed: Access token is expired');
+      if (typeof window !== 'undefined' && window.AuthCore) {
+        try {
+          const isValid = window.AuthCore.isTokenValid();
+          if (!isValid) {
+            console.log('Refresh needed: Access token is expired');
+            return true;
+          }
+          return false;
+        } catch (error) {
+          console.error('Error checking token validity:', error);
+          return true; // Default to needing refresh on error
+        }
       }
-      return isExpired;
+      
+      // If we can't check token validity, assume refresh is needed to be safe
+      return true;
     } catch (e) {
       console.warn('Error checking if refresh needed:', e);
       // Default to true on error to be safe
@@ -227,6 +260,11 @@ export const NavigationStateManager = {  /**
       // Clear refresh needed cookie
       if (typeof document !== 'undefined') {
         document.cookie = 'refreshNeeded=; max-age=0; path=/;';
+      }
+      
+      // Clear auth state with new AuthSession API if available
+      if (typeof window !== 'undefined' && window.AuthSession) {
+        window.AuthSession.clearLoginRedirect();
       }
     } catch (e) {
       console.warn('Error clearing navigation state:', e);

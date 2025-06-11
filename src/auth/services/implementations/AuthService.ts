@@ -14,21 +14,65 @@
 
 import { PrismaClient, User, RefreshToken } from '@prisma/client';
 import { IAuthService } from '../interfaces/IAuthService';
-import { LoginInput, RegisterInput, TokenPair, TokenPayload, AuthResult, PasswordChange, Device } from '../models/auth-models';
 import { UserRole, TokenType, TwoFactorMethod } from '../../enums';
-import { AUTH_CONFIG } from '@/auth';
-import { TokenUtil } from '@/auth';
+import { AUTH_CONFIG, TokenUtil } from '@/auth';
+
+// Import models from local types
+import type { AuthTokens, UserCredentials, AuthResponse, UserProfile } from '../models/auth-models';
+// Define required types for AuthService
+interface LoginInput {
+  email: string;
+  password: string;
+  deviceId?: string;
+  rememberMe?: boolean;
+}
+
+interface RegisterInput {
+  email: string;
+  password: string;
+  firstName?: string;
+  lastName?: string;
+}
+
+interface TokenPair {
+  accessToken: string;
+  refreshToken: string;
+  expiresAt: number;
+}
+
+interface TokenPayload {
+  id: string;
+  email: string;
+  role: UserRole;
+}
+
+interface AuthResult {
+  user: any;
+  tokens: TokenPair;
+}
+
+interface PasswordChange {
+  currentPassword: string;
+  newPassword: string;
+}
+
+interface Device {
+  id: string;
+  name: string;
+  lastUsed: Date;
+}
+
 // Use browser-compatible bcrypt wrapper instead of importing directly
 import bcrypt from '../../utils/bcrypt-browser';
 import { v4 as uuidv4 } from 'uuid';
-import { passwordValidator } from '../../utils/password-validator';
+import { PasswordValidator } from '../../utils/password-validator';
 import { AuditLogger } from '../../../shared/services/audit-logger';
 import { ITwoFactorSetupResponse, ITwoFactorVerifyResponse } from '../interfaces/IAuthService';
 import prisma from '../../../lib/prisma';
 import { AuthSecurityLogger } from '../utils/auth-security-logger';
 import { SecurityEventType, SecurityEventSeverity } from '../../../shared/services/security-audit';
 import * as jwt from 'jsonwebtoken';
-import { deviceIdentityService } from '../../utils/device-identity-service';
+import { DeviceIdentityService } from '../../utils/device-identity-service';
 import { TwoFactorAuthService } from '../implementations/TwoFactorAuthService';
 
 /**
@@ -289,6 +333,12 @@ export class AuthService implements IAuthService {
         email: user.email,
         role: user.role as unknown as UserRole
       };
+      
+      // Defensive check to ensure TokenUtil is available
+      if (!TokenUtil || typeof TokenUtil.generateTokens !== 'function') {
+        console.error('TokenUtil is not available or missing generateTokens method');
+        throw new Error('Authentication system error: Token generator unavailable');
+      }
       
       const tokens = TokenUtil.generateTokens(tokenPayload, credentials.deviceId);
       
@@ -606,7 +656,7 @@ export class AuthService implements IAuthService {
    */
   async verifyTempToken(token: string): Promise<string | null> {
     try {
-      const payload = TokenUtil.verifyToken<TokenPayload>(token, 'temp');
+      const payload = TokenUtil.verifyToken(token, 'temp');
       
       if (!payload) {
         return null;
@@ -867,7 +917,7 @@ export class AuthService implements IAuthService {
   ): Promise<ITwoFactorVerifyResponse> {
     try {
       // First, verify the temp token to get the user ID
-      const payload = TokenUtil.verifyToken<{ id: string; temp: boolean }>(tempToken, TokenType.TEMP);
+      const payload = TokenUtil.verifyToken(tempToken, TokenType.TEMP);
       
       if (!payload || !payload.id || !payload.temp) {
         return { success: false };

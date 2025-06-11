@@ -13,8 +13,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import AuthDebugLogger from '../AuthDebugLogger';
-import AuthDebugger from '../AuthDebugger';
+import LogoutButton from '@/components/logout-button';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -30,13 +29,8 @@ export default function ClinicalLayout({ children }: LayoutProps) {
     { name: 'Patients', href: '/patients' },
     { name: 'Prescriptions', href: '/prescriptions' },
     { name: 'Reports', href: '/reports' },
-    { name: 'Settings', href: '/settings' },
-  ];
+    { name: 'Settings', href: '/settings' },  ];
     return (    <>
-      {/* Debug components for authentication issues */}
-      <AuthDebugLogger />
-      <AuthDebugger visible={false} />
-      
       {/* Accessibility skip link */}
       <a href="#main-content" className="skip-to-content">
         Skip to content
@@ -85,8 +79,7 @@ export default function ClinicalLayout({ children }: LayoutProps) {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
                 </svg>
               </button>
-              
-              {/* User profile dropdown - can be enhanced with a proper dropdown component */}
+                {/* User profile dropdown - can be enhanced with a proper dropdown component */}
               <div className="ml-3 relative">
                 <button 
                   className="flex items-center text-sm rounded-full focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
@@ -97,6 +90,13 @@ export default function ClinicalLayout({ children }: LayoutProps) {
                     Dr
                   </div>
                 </button>
+              </div>
+              
+              {/* Logout button */}
+              <div className="ml-4">
+                <LogoutButton 
+                  className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+                />
               </div>
             </div>
             
@@ -163,19 +163,16 @@ export default function ClinicalLayout({ children }: LayoutProps) {
                 onClick={() => setMenuOpen(false)}
               >
                 Your Profile
-              </Link>
-              <Link
+              </Link>              <Link
                 href="/settings"
                 className="block px-4 py-2 text-base font-medium text-gray-600 hover:text-gray-800 hover:bg-gray-100 no-underline"
                 onClick={() => setMenuOpen(false)}
               >
                 Settings
               </Link>
-              <button
-                className="block w-full text-left px-4 py-2 text-base font-medium text-gray-600 hover:text-gray-800 hover:bg-gray-100"
-              >
-                Sign out
-              </button>
+              <div className="block w-full text-left px-4 py-2">
+                <LogoutButton className="block w-full text-left text-base font-medium text-gray-600 hover:text-gray-800 hover:bg-gray-100" />
+              </div>
             </div>
           </div>
         </div>

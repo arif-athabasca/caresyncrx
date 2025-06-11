@@ -9,10 +9,9 @@
 export { AUTH_CONFIG } from './auth/config';
 
 // Utils exports
-export { TokenStorage } from './auth/utils/token-storage';
-export { TokenUtil } from './auth/utils/token-util';
 export { DeviceIdentityService } from './auth/utils/device-identity-service';
 export { passwordValidator, passwordSchema } from './auth/utils/password-validator';
+export { TokenUtil } from './auth/utils/token-util';
 
 // Service exports
 export { AuthService } from './auth/services/implementations/AuthService';
@@ -22,7 +21,7 @@ export { TwoFactorAuthService } from './auth/services/implementations/TwoFactorA
 export { UserRole, TokenType, LoginStatus, TwoFactorMethod, AuthEventType } from './auth/enums';
 
 // Type exports
-export type { User, LoginRequest, LoginResponse, RefreshTokenRequest, RefreshTokenResponse } 
+export type { AuthTokens, UserCredentials, AuthResponse, UserProfile } 
   from './auth/services/models/auth-models';
 
 // Constants

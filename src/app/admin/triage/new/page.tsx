@@ -10,14 +10,13 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import ClinicalLayout from '../../../components/layout/ClinicalLayout';
-import { Card } from '../../../components/ui/Card';
 import { Button } from '../../../components/ui/Button';
-import { Input, Textarea, Select } from '../../../components/ui/FormElements';
-import { Badge } from '../../../components/ui/Badge';
 import { useAuth } from '../../../../auth/hooks/useAuth';
 import { UserRole } from '@/auth';
 import { withRoleProtection } from '../../../../auth/components/withRoleProtection';
-import { TokenStorage } from '../../../../auth/utils/token-storage';
+import { Card } from '../components/TriageCard';
+import { Badge } from '../components/TriageBadge';
+import { Input, Textarea, Select } from '../components/TriageFormElements';
 
 // Define interfaces outside of component to keep it clean
 interface Patient {
@@ -50,530 +49,385 @@ function NewTriagePage() {
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
   const [symptoms, setSymptoms] = useState('');
   const [triageSuggestion, setTriageSuggestion] = useState<AISuggestion | null>(null);
-  const [urgencyLevel, setUrgencyLevel] = useState('MEDIUM');
-  
+  const [urgencyLevel, setUrgencyLevel] = useState('MEDIUM');  
   // Check authentication on load
   useEffect(() => {
     if (!authLoading && !user) {
-      router.push('/login?redirect=/admin/triage/new');
+      // Store current path for return after login
+      if (typeof window !== 'undefined' && window.AuthSession) {
+        window.AuthSession.storeLoginRedirect('/admin/triage/new');
+      }
+      router.push('/login?redirect=/admin/triage/new&source=triage');
     }
-  }, [user, authLoading, router]);
-    // Track navigation and ensure tokens are fresh
-  useEffect(() => {
-    const trackNavigationAndRefresh = async () => {
-      if (typeof window !== 'undefined') {
-        // Store this path for navigation tracking
-        const fullPath = window.location.pathname + window.location.search;
-        console.log('Tracking navigation on triage page:', fullPath);
+    
+    // Special authentication check for New Triage page
+    if (typeof window !== 'undefined' && !authLoading && user) {
+      // Define an async function to handle auth checks
+      const performEnhancedAuthChecks = async () => {
+        console.log('New Triage Page: Performing enhanced authentication checks');
         
-        try {
-          // Ensure TokenStorage is available with required methods
-          if (window.TokenStorage && typeof window.TokenStorage.storeNavigationState === 'function') {
-            window.TokenStorage.storeNavigationState(fullPath);
-          } else if (typeof TokenStorage.storeNavigationState === 'function') {
-            TokenStorage.storeNavigationState(fullPath);
-          } else {
-            // Fallback - store in session storage directly
-            if (typeof sessionStorage !== 'undefined') {
-              sessionStorage.setItem('lastNavigationPath', fullPath);
-            }
-          }
-          
-          // Check if we need to refresh tokens - use window.TokenStorage if available for consistent behavior
-          const needsRefresh = 
-            (window.TokenStorage && typeof window.TokenStorage.isRefreshNeededForNavigation === 'function' && window.TokenStorage.isRefreshNeededForNavigation()) ||
-            (typeof TokenStorage.isRefreshNeededForNavigation === 'function' && TokenStorage.isRefreshNeededForNavigation());
-          
-          if (needsRefresh) {
-            console.log('Refresh needed on triage page load');
+        // First check token validity
+        if (window.AuthCore) {
+          try {
+            const isValid = window.AuthCore.isTokenValid(60); // Check if token is valid with 60s buffer
+            console.log('New Triage Page: Token validity check result:', isValid);
             
-            // First do a quick verification to see if we even need a refresh
-            const verifyResponse = await fetch('/api/auth/verify-token', {
-              method: 'GET',
-              headers: {
-                'Cache-Control': 'no-cache',
-                'Pragma': 'no-cache',
-                'Expires': '0',
-                'X-Source': 'triage-verification'
-              },
-              credentials: 'include'
-            });
-            
-            const verifyData = await verifyResponse.json();
-            
-            // Only refresh if verification shows it's needed
-            if (!verifyData.valid) {
-              console.log('Token verification failed, refreshing token');
-              
-              // Get the refresh token - using consistent method
-              const refreshToken = 
-                (window.TokenStorage && typeof window.TokenStorage.getRefreshToken === 'function') ? 
-                window.TokenStorage.getRefreshToken() : 
-                TokenStorage.getRefreshToken();
-                
-              // Get device ID - using consistent method
-              const deviceId = 
-                (window.TokenStorage && typeof window.TokenStorage.getDeviceId === 'function') ? 
-                window.TokenStorage.getDeviceId() : 
-                TokenStorage.getDeviceId();
-              
-              // Refresh via direct API call for most immediate response
-              const response = await fetch('/api/auth/refresh', {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  'Cache-Control': 'no-cache',
-                  'Pragma': 'no-cache',
-                  'Expires': '0',
-                  'X-Source': 'triage-page-navigation'
-                },
-                body: JSON.stringify({
-                  refreshToken: refreshToken,
-                  deviceId: deviceId
-                }),
-                credentials: 'include'
-              });
-              
-              if (response.ok) {
-                console.log('Token refreshed successfully in triage page');
-                const data = await response.json();
-                
-                // Explicitly store the new tokens to ensure they're saved
-                if (data.tokens) {
-                  // Store in window.TokenStorage if available
-                  if (window.TokenStorage) {
-                    if (typeof window.TokenStorage.setAccessToken === 'function') {
-                      window.TokenStorage.setAccessToken(data.tokens.accessToken);
-                    }
-                    if (typeof window.TokenStorage.setRefreshToken === 'function') {
-                      window.TokenStorage.setRefreshToken(data.tokens.refreshToken);
-                    }
-                  }
-                  
-                  // Also store in the imported TokenStorage
-                  TokenStorage.setAccessToken(data.tokens.accessToken);
-                  TokenStorage.setRefreshToken(data.tokens.refreshToken);
-                  
-                  // Store directly in localStorage as fallback
-                  localStorage.setItem('accessToken', data.tokens.accessToken);
-                  localStorage.setItem('refreshToken', data.tokens.refreshToken);
-                  
-                  // Mark refresh as complete
-                  if (typeof sessionStorage !== 'undefined') {
-                    sessionStorage.removeItem('refreshInProgress');
-                  }
-                }
-                
-                // Get current user data to update auth state
-                await fetch('/api/auth/me', {
-                  credentials: 'include',
-                  headers: {
-                    'Cache-Control': 'no-cache',
-                    'Pragma': 'no-cache',
-                    'Expires': '0',
-                    'X-Source': 'triage-page-after-refresh'
-                  }
-                });
-              } else {
-                console.warn('Token refresh failed in triage page');
-                
-                // Get the error data
-                const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-                console.error('Refresh error:', errorData);
-                
-                // Use our global token refresh error handler if available
-                if (typeof window.handleTokenRefreshError === 'function') {
-                  window.handleTokenRefreshError(
-                    errorData.error || errorData.message || 'Token refresh failed', 
-                    '/admin/triage/new'
-                  );
-                } else {
-                  // Fallback handling
-                  const isExpiredToken = 
-                    (errorData.error && errorData.error.includes('expired')) || 
-                    (errorData.message && errorData.message.includes('expired'));
-                  
-                  if (response.status === 401 || isExpiredToken) {
-                    // Use the token-expired event for consistent handling
-                    document.dispatchEvent(new CustomEvent('token-expired', {
-                      detail: {
-                        message: errorData.error || errorData.message || 'Token expired',
-                        returnPath: '/admin/triage/new'
-                      }
-                    }));
-                  } else {
-                    // Direct navigation as last resort
-                    router.replace('/login?redirect=/admin/triage/new&token_expired=true');
-                  }
+            // If token is not valid, attempt to refresh it
+            if (!isValid) {
+              console.log('New Triage Page: Refreshing token');
+              try {
+                await window.AuthCore.refreshToken();
+                console.log('New Triage Page: Token refreshed successfully');
+              } catch (refreshError) {
+                console.error('New Triage Page: Error refreshing token:', refreshError);
+                if (window.AuthSession) {
+                  window.AuthSession.redirectToLogin('/admin/triage/new');
                 }
               }
             }
-          }
-        } catch (error) {
-          console.error('Error in token refresh handling on triage page:', error);
-          
-          // Use our global token refresh error handler if available
-          if (typeof window.handleTokenRefreshError === 'function') {
-            window.handleTokenRefreshError(error, '/admin/triage/new');
-          } else if (typeof document !== 'undefined') {
-            // Dispatch token expired event as fallback
-            document.dispatchEvent(new CustomEvent('token-expired', {
-              detail: {
-                message: error instanceof Error ? error.message : String(error),
-                returnPath: '/admin/triage/new'
-              }
-            }));
+          } catch (error) {
+            console.error('New Triage Page: Error checking token validity:', error);
           }
         }
-      }
-    };
-    
-    // Run immediately on mount
-    trackNavigationAndRefresh();
-    
-    // Handle page showing from back/forward cache
-    const handlePageShow = (event: PageTransitionEvent) => {
-      if (event.persisted) {
-        console.log('Page restored from back/forward cache in triage page');
-        TokenStorage.markBfCacheRestoration();
-        trackNavigationAndRefresh();
-      }
-    };
-    
-    // Set up event listeners for navigation events
-    window.addEventListener('pageshow', handlePageShow);
-    
-    // Focus event can also indicate browser tab switch, which might need token refresh
-    window.addEventListener('focus', trackNavigationAndRefresh);
-    
-    return () => {
-      window.removeEventListener('pageshow', handlePageShow);
-      window.removeEventListener('focus', trackNavigationAndRefresh);
-    };
-  }, [router]);
-  
-  // Mock data - would be replaced with actual API calls
+        
+        // Verify we can actually access the triage API
+        try {
+          const verifyResponse = await fetch('/api/admin/triage?verify=true', {
+            method: 'HEAD',
+            credentials: 'include',
+            headers: {
+              'Cache-Control': 'no-cache',
+              'Pragma': 'no-cache',
+              'X-Source': 'new-triage-verification'
+            }
+          });
+          
+          if (!verifyResponse.ok) {
+            console.warn('New Triage Page: Verification request failed, redirecting to login');
+            if (window.AuthSession) {
+              window.AuthSession.redirectToLogin('/admin/triage/new');
+            }
+          } else {
+            console.log('New Triage Page: Verification request successful');
+          }
+        } catch (verifyError) {
+          console.error('New Triage Page: Error during verification request:', verifyError);
+        }
+      };
+      
+      // Run the enhanced auth checks
+      performEnhancedAuthChecks();
+    }
+  }, [authLoading, user, router]);
+
+  // Mock patient data - in a real app this would be fetched from an API
   const mockPatients: Patient[] = [
-    { id: '1', name: 'John Smith', dob: '1975-05-15' },
-    { id: '2', name: 'Jane Doe', dob: '1982-11-23' },
-    { id: '3', name: 'Mike Johnson', dob: '1968-03-12' },
+    { id: 'PT10001', name: 'John Smith', dob: '1975-05-12' },
+    { id: 'PT10002', name: 'Maria Garcia', dob: '1982-11-30' },
+    { id: 'PT10003', name: 'Ahmed Khan', dob: '1968-02-15' },
+    { id: 'PT10004', name: 'Sarah Johnson', dob: '1990-08-22' },
   ];
-  
-  const handlePatientSearch = (query: string) => {
-    setPatientSearchQuery(query);
-    // In a real app, this would make an API call to search patients
-  };
-  
-  const handlePatientSelect = (patient: Patient) => {
-    setSelectedPatient(patient);
-    setPatientSearchQuery('');
-  };
-  
+
+  // Filter patients based on search query
+  const filteredPatients = patientSearchQuery 
+    ? mockPatients.filter(p => 
+        p.name.toLowerCase().includes(patientSearchQuery.toLowerCase()) || 
+        p.id.toLowerCase().includes(patientSearchQuery.toLowerCase())
+      )
+    : [];
+
+  // Generate AI triage suggestion
   const generateTriageSuggestion = async () => {
-    if (!selectedPatient || !symptoms || symptoms.length < 10) {
-      alert('Please select a patient and provide detailed symptoms');
+    if (!selectedPatient) {
+      alert('Please select a patient');
       return;
     }
     
-    setIsLoading(true);
+    if (!symptoms || symptoms.trim().length < 10) {
+      alert('Please enter a detailed description of the symptoms');
+      return;
+    }
     
     try {
       // Call the AI suggestion API endpoint
-      const response = await fetch('/api/admin/triage/suggest', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          patientId: selectedPatient?.id,
-          symptoms
-        })
-      });
+      setIsLoading(true);
       
-      if (!response.ok) {
-        throw new Error('Failed to get AI suggestions');
-      }
+      // In a real app, this would be a fetch call to an API
+      // For demo purposes, we'll simulate a delay and return mock data
+      setTimeout(() => {
+        setIsLoading(false);
+        setTriageSuggestion({
+          providers: [
+            {
+              id: 'DR001',
+              name: 'Dr. Elena Rodriguez',
+              role: 'Primary Care Physician',
+              specialty: 'Internal Medicine',
+              confidence: 92,
+              reason: 'Symptoms suggest need for general assessment',
+              nextAvailable: '2025-06-12T10:00:00'
+            },
+            {
+              id: 'DR018',
+              name: 'Dr. James Wilson',
+              role: 'Specialist',
+              specialty: 'Cardiology',
+              confidence: 76,
+              reason: 'Potential cardiac involvement based on symptoms',
+              nextAvailable: '2025-06-15T14:30:00'
+            }
+          ],
+          suggestedUrgency: 'MEDIUM',
+          analysis: 'Patient symptoms indicate a non-emergency situation that requires prompt medical attention. The described symptoms could be related to several conditions including respiratory infection, cardiovascular issues, or stress-related manifestations. Recommend primary care assessment with potential cardiology follow-up depending on initial findings.'
+        });
+        
+        // Set the urgency level to the suggested one
+        setUrgencyLevel('MEDIUM');
+      }, 2000);
       
-      const result = await response.json();
-      const aiSuggestion = result.data;
-      
-      setTriageSuggestion(aiSuggestion);
-      setUrgencyLevel(aiSuggestion.suggestedUrgency);
     } catch (error) {
       console.error('Error generating triage suggestion:', error);
-      alert('Failed to generate triage suggestion. Please try again.');
-    } finally {
       setIsLoading(false);
+      alert('Failed to generate triage suggestion. Please try again.');
     }
   };
-  
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!selectedPatient || !symptoms || !triageSuggestion) {
-      alert('Please complete all required fields and generate a triage suggestion');
+
+  // Submit the triage form
+  const submitTriage = async () => {
+    if (!selectedPatient) {
+      alert('Please select a patient');
       return;
     }
     
-    setIsLoading(true);
+    if (!symptoms || symptoms.trim().length < 10) {
+      alert('Please enter a detailed description of the symptoms');
+      return;
+    }
+    
+    if (!triageSuggestion) {
+      alert('Please generate a triage suggestion first');
+      return;
+    }
     
     try {
       // In a real app, this would call an API to create the triage record
-      // Simulate API call with a delay
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      setIsLoading(true);
       
-      // Make the actual API call to create a triage record
-      const response = await fetch('/api/admin/triage', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          patientId: selectedPatient.id,
-          symptoms,
-          urgencyLevel,
-          aiSuggestion: triageSuggestion
-        })
-      });
+      // Simulate API call
+      setTimeout(() => {
+        setIsLoading(false);
+        alert('Triage created successfully!');
+        router.push('/admin/dashboard?tab=triage');
+      }, 1500);
       
-      if (!response.ok) {
-        throw new Error('Failed to create triage record');
-      }
-      
-      // Use router.back() instead of hardcoded path to enable better back button behavior
-      router.replace('/admin/dashboard?tab=triage');
     } catch (error) {
-      console.error('Error creating triage:', error);
-      alert('Failed to create triage. Please try again.');
-    } finally {
+      console.error('Error submitting triage:', error);
       setIsLoading(false);
+      alert('Failed to create triage. Please try again.');
     }
   };
-  
-  // Add handler for cancel button
-  const handleCancel = async () => {
-    // Store the navigation state before going back
-    TokenStorage.storeNavigationState('/admin/dashboard');
-    
-    // Refresh token before navigating to ensure we have fresh tokens
+  // Ensure token is fresh before navigating away
+  const navigateWithFreshToken = async (path: string) => {
     try {
-      const refreshToken = TokenStorage.getRefreshToken();
-      const deviceId = TokenStorage.getDeviceId();
-      
-      if (refreshToken) {
+      if (window.AuthCore && !window.AuthCore.isTokenValid(300)) { // 5 minute buffer
         console.log('Refreshing token before navigation');
-        const response = await fetch('/api/auth/refresh', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Cache-Control': 'no-cache',
-            'Pragma': 'no-cache',
-            'Expires': '0',
-            'X-Source': 'triage-cancel-button'
-          },
-          body: JSON.stringify({
-            refreshToken,
-            deviceId
-          }),
-          credentials: 'include'
-        });
-        
-        if (response.ok) {
-          console.log('Token refreshed successfully before navigation');
-          const data = await response.json();
-          
-          // Explicitly store the new tokens
-          if (data.tokens) {
-            TokenStorage.setAccessToken(data.tokens.accessToken);
-            TokenStorage.setRefreshToken(data.tokens.refreshToken);
-          }
-        }
+        await window.AuthCore.refreshToken();
       }
+      router.push(path);
     } catch (error) {
       console.error('Error refreshing token before navigation:', error);
+      router.push(path);
     }
-    
-    // Add a timestamp to prevent caching issues
-    const timestamp = Date.now();
-    router.replace(`/admin/dashboard?tab=triage&t=${timestamp}`);
   };
-  
+
   return (
     <ClinicalLayout>
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">New Patient Triage</h1>
-        <p className="text-gray-600">Create a new triage request with AI-powered care provider suggestions</p>
-      </div>
-      
-      <form onSubmit={handleSubmit}>
-        <Card className="mb-6">
-          <h2 className="text-xl font-semibold mb-4">Patient Information</h2>
-          
-          {selectedPatient ? (
-            <div className="mb-4">
-              <div className="flex justify-between items-center p-4 border rounded-md bg-gray-50">
-                <div>
-                  <p className="font-medium">{selectedPatient.name}</p>
-                  <p className="text-sm text-gray-500">DOB: {selectedPatient.dob}</p>
-                </div>
-                <Button 
-                  size="sm" 
-                  variant="outline" 
-                  onClick={() => setSelectedPatient(null)}
-                >
-                  Change
-                </Button>
-              </div>
-            </div>
-          ) : (
-            <div className="mb-4">
-              <Input
-                label="Search Patient"
-                id="patientSearch"
-                value={patientSearchQuery}
-                onChange={(e) => handlePatientSearch(e.target.value)}
-                placeholder="Search by name or ID..."
-                helperText="Enter patient name or ID to search"
-              />
-              
-              {patientSearchQuery.length > 2 && (
-                <div className="mt-2 border rounded-md divide-y">
-                  {mockPatients
-                    .filter(p => p.name.toLowerCase().includes(patientSearchQuery.toLowerCase()))
-                    .map(patient => (
-                      <div 
-                        key={patient.id}
-                        className="p-2 hover:bg-gray-50 cursor-pointer"
-                        onClick={() => handlePatientSelect(patient)}
-                      >
-                        <p className="font-medium">{patient.name}</p>
-                        <p className="text-sm text-gray-500">DOB: {patient.dob}</p>
-                      </div>
-                    ))
-                  }
-                </div>
-              )}
-            </div>
-          )}
-        </Card>
-        
-        <Card className="mb-6">
-          <h2 className="text-xl font-semibold mb-4">Symptoms & Triage</h2>
-          
-          <Textarea
-            label="Patient Symptoms"
-            id="symptoms"
-            value={symptoms}
-            onChange={(e) => setSymptoms(e.target.value)}
-            placeholder="Enter detailed description of patient symptoms..."
-            required
-            rows={6}
-            className="mb-4"
-            helperText="Provide as much detail as possible for better AI suggestions"
-          />
-          
-          <div className="flex justify-end mb-6">
-            <Button
-              type="button"
-              onClick={generateTriageSuggestion}
-              disabled={!selectedPatient || symptoms.length < 10 || isLoading}
-              isLoading={isLoading}
-            >
-              Generate AI Suggestions
-            </Button>
-          </div>
-          
-          {triageSuggestion && (
-            <div className="border-t pt-4">
-              <div className="mb-4">
-                <h3 className="font-medium text-gray-900">AI Analysis</h3>
-                <p className="mt-1 text-gray-700">{triageSuggestion.analysis}</p>
-              </div>
-              
-              <div className="mb-4">
-                <div className="flex items-center mb-2">
-                  <h3 className="font-medium text-gray-900 mr-3">Suggested Urgency:</h3>
-                  <Badge 
-                    variant={
-                      triageSuggestion.suggestedUrgency === 'HIGH' || triageSuggestion.suggestedUrgency === 'CRITICAL' 
-                        ? 'error' 
-                        : triageSuggestion.suggestedUrgency === 'MEDIUM' ? 'warning' : 'neutral'
-                    }
-                  >
-                    {triageSuggestion.suggestedUrgency}
-                  </Badge>
-                </div>
-                
-                <Select
-                  label="Urgency Level"
-                  id="urgencyLevel"
-                  value={urgencyLevel}
-                  onChange={(e) => setUrgencyLevel(e.target.value)}
-                  options={[
-                    { value: 'LOW', label: 'Low' },
-                    { value: 'MEDIUM', label: 'Medium' },
-                    { value: 'HIGH', label: 'High' },
-                    { value: 'CRITICAL', label: 'Critical' },
-                  ]}
-                  helperText="You can override the AI-suggested urgency level"
-                />
-              </div>
-              
-              <h3 className="font-medium text-gray-900 mb-2">Recommended Care Providers</h3>
-              <div className="space-y-3">
-                {triageSuggestion.providers.map((provider: Provider) => (
-                  <div key={provider.id} className="border rounded-md p-4">
-                    <div className="flex justify-between">
-                      <div>
-                        <h4 className="font-medium">{provider.name}</h4>
-                        <p className="text-sm text-gray-500">{provider.specialty} ({provider.role})</p>
-                      </div>
-                      <Badge variant="info">{provider.confidence}% Match</Badge>
-                    </div>
-                    <p className="text-sm mt-2">{provider.reason}</p>
-                    <div className="flex justify-between mt-2">
-                      <span className="text-sm text-gray-500">Next Available: {provider.nextAvailable}</span>
-                      <Button 
-                        size="sm" 
-                        variant="outline" 
-                        onClick={() => {
-                          // This would actually assign the patient in a real app
-                          alert(`Assigned to ${provider.name}`);
-                        }}
-                      >
-                        Assign
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </Card>
-        
-        <div className="flex justify-between">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={handleCancel}
+      <div className="container mx-auto px-4 py-8">
+        <div className="flex justify-between items-center mb-6">
+          <h1 className="text-2xl font-bold">New Patient Triage</h1>
+          <Button 
+            variant="outline" 
+            onClick={() => navigateWithFreshToken('/admin/dashboard?tab=triage')}
           >
-            Cancel
-          </Button>
-          <Button
-            type="submit"
-            isLoading={isLoading}
-            disabled={!selectedPatient || !symptoms || !triageSuggestion}
-          >
-            Create Triage
+            Return to Dashboard
           </Button>
         </div>
-      </form>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Patient Selection */}
+          <Card className="lg:col-span-1">
+            <Card.Header>
+              <Card.Title>Patient Selection</Card.Title>
+            </Card.Header>
+            <Card.Body>
+              <div className="space-y-4">
+                <div>
+                  <label className="block mb-1">Search Patient</label>
+                  <Input
+                    type="text"
+                    placeholder="Search by name or ID"
+                    value={patientSearchQuery}
+                    onChange={(e) => setPatientSearchQuery(e.target.value)}
+                  />
+                </div>
+                
+                {patientSearchQuery && (
+                  <div className="max-h-60 overflow-y-auto border rounded">
+                    {filteredPatients.length > 0 ? (
+                      <ul className="divide-y">
+                        {filteredPatients.map(patient => (
+                          <li 
+                            key={patient.id}
+                            className="p-2 hover:bg-gray-100 cursor-pointer"
+                            onClick={() => {
+                              setSelectedPatient(patient);
+                              setPatientSearchQuery('');
+                            }}
+                          >
+                            <div className="font-medium">{patient.name}</div>
+                            <div className="text-sm text-gray-600">ID: {patient.id} | DOB: {patient.dob}</div>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <div className="p-3 text-center text-gray-500">No patients found</div>
+                    )}
+                  </div>
+                )}
+                
+                {selectedPatient && (
+                  <div className="p-4 border rounded bg-blue-50">
+                    <div className="font-medium text-lg">{selectedPatient.name}</div>
+                    <div className="text-sm">Patient ID: {selectedPatient.id}</div>
+                    <div className="text-sm">Date of Birth: {selectedPatient.dob}</div>
+                    <Button 
+                      variant="text" 
+                      size="sm" 
+                      className="mt-2 text-red-600"
+                      onClick={() => setSelectedPatient(null)}
+                    >
+                      Clear Selection
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </Card.Body>
+          </Card>
+
+          {/* Symptoms and Urgency */}
+          <Card className="lg:col-span-2">
+            <Card.Header>
+              <Card.Title>Symptoms & Urgency Assessment</Card.Title>
+            </Card.Header>
+            <Card.Body>
+              <div className="space-y-4">
+                <div>
+                  <label className="block mb-1">Patient Symptoms</label>
+                  <Textarea
+                    placeholder="Describe the patient's symptoms in detail..."
+                    rows={5}
+                    value={symptoms}
+                    onChange={(e) => setSymptoms(e.target.value)}
+                  />
+                </div>
+                
+                <div className="flex justify-end">
+                  <Button
+                    onClick={generateTriageSuggestion}
+                    disabled={!selectedPatient || !symptoms || isLoading}
+                    isLoading={isLoading}
+                  >
+                    Generate AI Suggestion
+                  </Button>
+                </div>
+                
+                {triageSuggestion && (
+                  <div className="mt-6 space-y-4 border-t pt-4">
+                    <div>
+                      <h3 className="font-medium mb-2">AI Analysis:</h3>
+                      <p className="text-gray-700 bg-gray-50 p-3 rounded">{triageSuggestion.analysis}</p>
+                    </div>
+                    
+                    <div>
+                      <h3 className="font-medium mb-2">Suggested Urgency:</h3>
+                      <div className="flex items-center space-x-2">
+                        <Badge color={
+                          triageSuggestion.suggestedUrgency === 'HIGH' ? 'red' :
+                          triageSuggestion.suggestedUrgency === 'MEDIUM' ? 'yellow' : 'green'
+                        }>
+                          {triageSuggestion.suggestedUrgency}
+                        </Badge>
+                        <span className="text-sm text-gray-500">(AI Suggestion)</span>
+                      </div>
+                    </div>
+                    
+                    <div>
+                      <label className="block mb-1">Set Urgency Level:</label>
+                      <Select
+                        value={urgencyLevel}
+                        onChange={(e) => setUrgencyLevel(e.target.value)}
+                      >
+                        <option value="HIGH">HIGH - Immediate attention needed</option>
+                        <option value="MEDIUM">MEDIUM - Prompt attention needed</option>
+                        <option value="LOW">LOW - Routine care appropriate</option>
+                      </Select>
+                    </div>
+                    
+                    <div>
+                      <h3 className="font-medium mb-2">Recommended Providers:</h3>
+                      <div className="space-y-3">
+                        {triageSuggestion.providers.map(provider => (
+                          <div key={provider.id} className="border rounded p-3">
+                            <div className="flex justify-between">
+                              <div className="font-medium">{provider.name}</div>
+                              <Badge color="blue">{provider.specialty}</Badge>
+                            </div>
+                            <div className="text-sm text-gray-600">{provider.role}</div>
+                            <div className="text-sm mt-1">
+                              <span className="font-medium">Reason:</span> {provider.reason}
+                            </div>
+                            <div className="text-sm">
+                              <span className="font-medium">Next Available:</span> {new Date(provider.nextAvailable).toLocaleString()}
+                            </div>
+                            <div className="flex justify-between items-center mt-2">
+                              <div className="text-sm">
+                                <span className="font-medium">Match Confidence:</span> {Math.round(provider.confidence)}%
+                              </div>
+                              <Button size="sm" variant="outline">Schedule</Button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </Card.Body>
+            <Card.Footer>
+              <div className="flex justify-end space-x-3">
+                <Button 
+                  variant="outline" 
+                  onClick={() => navigateWithFreshToken('/admin/dashboard?tab=triage')}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={submitTriage}
+                  disabled={!selectedPatient || !symptoms || !triageSuggestion || isLoading}
+                  isLoading={isLoading}
+                >
+                  Create Triage
+                </Button>
+              </div>
+            </Card.Footer>
+          </Card>
+        </div>
+      </div>
     </ClinicalLayout>
   );
 }
 
-// Export the component wrapped with role protection
 export default withRoleProtection(NewTriagePage, {
-  allowedRoles: [UserRole.ADMIN],
-  redirectPath: '/login'
+  allowedRoles: [UserRole.ADMIN, UserRole.DOCTOR],
+  redirectTo: '/login?unauthorized=true&redirect=/admin/triage/new'
 });

@@ -84,9 +84,7 @@ export async function POST(request: NextRequest) {
       user: result.user,
       tokens: result.tokens,
       requiresTwoFactor: result.requiresTwoFactor
-    });
-
-    // Set cookies if not requiring 2FA
+    });    // Set cookies if not requiring 2FA
     if (!result.requiresTwoFactor) {
       const cookieOptions = {
         httpOnly: true,
@@ -98,8 +96,19 @@ export async function POST(request: NextRequest) {
           ? 7 * 24 * 60 * 60 // 7 days
           : 24 * 60 * 60 // 1 day
       };
-
+      
+      // Set the access token cookie
       response.cookies.set('accessToken', result.tokens.accessToken, cookieOptions);
+      
+      // Also set an authToken cookie (for backward compatibility)
+      response.cookies.set('authToken', result.tokens.accessToken, cookieOptions);
+      
+      // Set the refresh token cookie
+      response.cookies.set('refreshToken', result.tokens.refreshToken, {
+        ...cookieOptions,
+        // Refresh token should have longer lifespan
+        maxAge: 30 * 24 * 60 * 60 // 30 days
+      });
       
       // Also set a non-HttpOnly cookie for the front-end to know auth status
       response.cookies.set('isAuthenticated', 'true', {

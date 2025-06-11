@@ -157,7 +157,6 @@ export default function DashboardPage() {
         );
     }
   };
-
   // Handle logout
   const handleLogout = () => {
     logout();
@@ -179,8 +178,7 @@ export default function DashboardPage() {
           </p>
         </div>
       )}
-      
-      <div className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-6">
         <MetricCard
           label="Patients Today"
           value="24"
@@ -210,20 +208,6 @@ export default function DashboardPage() {
             </svg>
           }
         />
-      </div>
-      
-      <div className="mt-6 text-right">
-        <Button
-          variant="text"
-          onClick={handleLogout}
-          icon={
-            <svg className="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-            </svg>
-          }
-        >
-          Sign Out
-        </Button>
       </div>
     </ClinicalLayout>
   );

@@ -4,6 +4,7 @@ This directory contains comprehensive documentation for the CareSyncRx applicati
 
 ## Core Documentation
 
+- **auth-core-consolidation-complete.md** - Details on the authentication core consolidation
 - **token-refresh-enhanced-update.md** - Latest update on token refresh system improvements
 - **device-identity-enhancement-guide.md** - Implementation guide for the device identity system
 - **troubleshooting-guide.md** - Common issues and solutions
@@ -29,7 +30,8 @@ This directory contains comprehensive documentation for the CareSyncRx applicati
 
 ## Using This Documentation
 
-1. For issues with authentication or token refresh, refer to `token-refresh-enhanced-update.md` and `device-identity-enhancement-guide.md`
-2. For browser navigation issues, refer to `browser-back-button-fix-implemented.md`
-3. For security-related questions, start with `security-guide.md`
-4. For troubleshooting, refer to `troubleshooting-guide.md`
+1. For authentication consolidation information, refer to `auth-core-consolidation-complete.md`
+2. For issues with authentication or token refresh, refer to `token-refresh-enhanced-update.md` and `device-identity-enhancement-guide.md`
+3. For browser navigation issues, refer to `browser-back-button-fix-implemented.md`
+4. For security-related questions, start with `security-guide.md`
+5. For troubleshooting, refer to `troubleshooting-guide.md`

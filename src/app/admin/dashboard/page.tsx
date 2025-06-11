@@ -29,10 +29,9 @@ function AdminDashboardPage() {
   const tabParam = searchParams?.get('tab');
   const [activeTab, setActiveTab] = useState(tabParam || 'triage');  // Store navigation state for browser history support
   useEffect(() => {
-    // Import dynamically to avoid SSR issues
-    import('@/auth/utils/token-storage').then(({ TokenStorage }) => {
-      TokenStorage.storeNavigationState(window.location.pathname + window.location.search);
-    });
+    if (typeof window !== 'undefined' && window.AuthSession) {
+      window.AuthSession.storeLoginRedirect(window.location.pathname + window.location.search);
+    }
   }, []);
   
   // Update URL when tab changes
@@ -47,10 +46,12 @@ function AdminDashboardPage() {
     const newPath = `${window.location.pathname}?${newSearchParams.toString()}`;
     router.push(newPath, { 
       scroll: false // Prevents scrolling to top
-    });    // Store the new navigation state
-    import('@/auth/utils/token-storage').then(({ TokenStorage }) => {
-      TokenStorage.storeNavigationState(newPath);
     });
+    
+    // Store the new navigation state
+    if (typeof window !== 'undefined' && window.AuthSession) {
+      window.AuthSession.storeLoginRedirect(newPath);
+    }
   };
 
   return (
@@ -429,5 +430,5 @@ function ReportsTab() {
 // Export the component wrapped with role protection
 export default withRoleProtection(AdminDashboardPage, {
   allowedRoles: [UserRole.ADMIN],
-  redirectPath: '/login'
+  redirectTo: '/login'
 });

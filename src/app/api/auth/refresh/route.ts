@@ -121,8 +121,7 @@ export async function POST(request: NextRequest) {
           refreshToken: newRefreshToken
         }
       });
-      
-      // Set cookies for the new tokens
+        // Set cookies for the new tokens
       const cookieOptions = {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
@@ -132,9 +131,11 @@ export async function POST(request: NextRequest) {
       };
       
       response.cookies.set('accessToken', accessToken, cookieOptions);
+      response.cookies.set('authToken', accessToken, cookieOptions); // For backward compatibility
       response.cookies.set('refreshToken', newRefreshToken, {
         ...cookieOptions,
-        path: '/api/auth' // Restrict refresh token to auth endpoints
+        path: '/api/auth', // Restrict refresh token to auth endpoints
+        maxAge: 30 * 24 * 60 * 60 // 30 days
       });
       
       // Store navigation path from request headers if present

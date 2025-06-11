@@ -5,10 +5,6 @@
  * This file helps avoid circular dependencies by providing a central export point.
  */
 
-// Token management utilities
-export { TokenStorage } from './token-storage';
-export { TokenUtil } from './token-util';
-
 // Password utilities
 export { passwordValidator } from './password-validator';
 
@@ -18,3 +14,6 @@ export { DeviceIdentityService } from './device-identity-service';
 // Import device identity extension to add setDeviceId method
 import './device-identity-extension';
 export { deviceIdentity } from './device-identity';
+
+// Navigation state management
+export { NavigationStateManager } from './navigation-state-manager';

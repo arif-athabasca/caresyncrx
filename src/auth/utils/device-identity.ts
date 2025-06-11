@@ -142,10 +142,26 @@ export class DeviceIdentity {
   /**
    * Generate detailed information about the current device
    * This can be used for device verification on the server
-   */
-  public async getDetailedDeviceInfo(): Promise<DeviceInfo> {
+   */  public async getDetailedDeviceInfo(): Promise<DeviceInfo> {
     const id = await this.getDeviceId();
     const fingerprint = this.deviceFingerprint || await this.generateDeviceFingerprint();
+    
+    // Server-side fallback
+    if (typeof window === 'undefined' || typeof navigator === 'undefined') {
+      return {
+        id,
+        fingerprint,
+        timestamp: Date.now(),
+        properties: {
+          userAgent: 'server',
+          screenSize: '0x0',
+          colorDepth: 0,
+          timeZone: 'UTC',
+          language: 'en',
+          platform: 'server'
+        }
+      };
+    }
     
     return {
       id,
@@ -164,11 +180,16 @@ export class DeviceIdentity {
   /**
    * Verify if a device ID appears to be valid for the current device
    * This is less strict than server-side validation to accommodate for browser changes
-   */
-  public async verifyDeviceId(deviceId: string): Promise<boolean> {
+   */  public async verifyDeviceId(deviceId: string): Promise<boolean> {
     if (!deviceId) {
       console.warn('Empty device ID provided for verification');
       return false;
+    }
+    
+    // Server-side environment check - be permissive
+    if (typeof window === 'undefined') {
+      console.log('Server-side device verification - permissive mode');
+      return true;
     }
     
     // If the device ID matches our current one, it's valid
@@ -252,8 +273,13 @@ export class DeviceIdentity {
   /**
    * Load existing device ID from various storage mechanisms
    * @returns The device ID if found, null otherwise
-   */
-  private async loadExistingDeviceId(): Promise<string | null> {
+   */  private async loadExistingDeviceId(): Promise<string | null> {
+    // Server-side environment check
+    if (typeof window === 'undefined') {
+      console.log('Skipping device ID loading on server-side');
+      return null;
+    }
+    
     try {
       // Try localStorage first (most common)
       const localStorageId = localStorage.getItem(STORAGE_KEYS.DEVICE_ID);
@@ -319,8 +345,12 @@ export class DeviceIdentity {
   /**
    * Generate a fingerprint for the current device
    * This uses various browser properties to create a relatively stable fingerprint
-   */
-  private async generateDeviceFingerprint(): Promise<string> {
+   */  private async generateDeviceFingerprint(): Promise<string> {
+    // Server-side fallback
+    if (typeof window === 'undefined' || typeof navigator === 'undefined') {
+      return createEdgeSafeHash('server-' + Date.now());
+    }
+    
     try {
       const components = [
         navigator.userAgent,
@@ -357,9 +387,15 @@ export class DeviceIdentity {
 
   /**
    * Persist device ID in all available storage mechanisms
-   */
-  private async persistDeviceId(deviceId: string, fingerprint: string | null): Promise<void> {
+   */  private async persistDeviceId(deviceId: string, fingerprint: string | null): Promise<void> {
     const timestamp = Date.now();
+    
+    // Server-side environment check
+    if (typeof window === 'undefined') {
+      // On server, just log that we're skipping storage
+      console.log('Skipping device ID persistence on server-side');
+      return;
+    }
     
     try {
       // Store in localStorage (primary)
@@ -440,14 +476,15 @@ export class DeviceIdentity {
    * This helps keep device ID consistent across tabs
    */
   private setupStorageEventListeners(): void {
-    try {
-      // Listen for storage events from other tabs
-      window.addEventListener('storage', (event) => {
-        if (event.key === STORAGE_KEYS.DEVICE_ID && event.newValue) {
-          // Another tab updated the device ID, update our local copy
-          this.deviceId = event.newValue;
-        }
-      });
+    try {      // Listen for storage events from other tabs
+      if (typeof window !== 'undefined') {
+        window.addEventListener('storage', (event) => {
+          if (event.key === STORAGE_KEYS.DEVICE_ID && event.newValue) {
+            // Another tab updated the device ID, update our local copy
+            this.deviceId = event.newValue;
+          }
+        });
+      }
     } catch (error) {
       console.warn('Error setting up storage event listeners:', error);
     }
@@ -540,8 +577,7 @@ export class DeviceIdentity {
           return component;
         }).join('|');
       };
-      
-      console.log('Fingerprint comparison:', {
+        console.log('Fingerprint comparison:', {
         stored: sanitizeForLog(storedFingerprint),
         current: sanitizeForLog(currentFingerprint),
         storedLength: storedFingerprint.length,
@@ -549,14 +585,16 @@ export class DeviceIdentity {
       });
       
       // Log browser-specific info that may have changed
-      console.log('Current browser environment:', {
-        userAgent: navigator.userAgent.substring(0, 50) + '...',
-        language: navigator.language,
-        platform: navigator.platform,
-        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-        colorDepth: window.screen.colorDepth,
-        screenSize: `${window.screen.width}x${window.screen.height}`
-      });
+      if (typeof window !== 'undefined' && typeof navigator !== 'undefined') {
+        console.log('Current browser environment:', {
+          userAgent: navigator.userAgent.substring(0, 50) + '...',
+          language: navigator.language,
+          platform: navigator.platform,
+          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          colorDepth: window.screen.colorDepth,
+          screenSize: `${window.screen.width}x${window.screen.height}`
+        });
+      }
     } catch (error) {
       console.error('Error logging fingerprint components:', error);
     }

@@ -26,22 +26,28 @@ export interface Session {
 /**
  * Retrieves the current authenticated session from cookies or authorization header
  */
-export async function getSession(): Promise<Session | null> {  try {
+export async function getSession(): Promise<Session | null> {  
+  try {
     // For API routes - get token from cookie or authorization header
     const cookieStore = await cookies();
-    const authCookie = cookieStore.get('authToken');
     
-    if (!authCookie?.value) {
+    // Check for access token in any of the possible cookie names
+    const accessTokenCookie = cookieStore.get('accessToken') || cookieStore.get('authToken');
+    
+    if (!accessTokenCookie?.value) {
+      console.log('[Session Utils] No access token found in cookies');
       return null;
     }
     
-    const token = authCookie.value;
+    const token = accessTokenCookie.value;
     
     // Verify and decode the token
     const jwtVerifier = authContainer.resolve('jwtVerifier') as JWTVerifier;
     const payload = await jwtVerifier.verify(token);
     
     if (!payload || !payload.user) {
+      console.log('[Session Utils] Token verification failed or missing user data', 
+        payload ? 'Invalid payload structure' : 'Token verification failed');
       return null;
     }
     
