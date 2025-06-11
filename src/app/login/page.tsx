@@ -186,7 +186,7 @@ function LoginContent() {
       console.error('Login error:', err);
       
       // Enhanced error logging for authentication failures
-      if (typeof window !== 'undefined' && window.console && window.console.error) {
+      if (typeof window !== 'undefined') {
         console.error('Authentication error details:', {
           message: err instanceof Error ? err.message : 'Unknown error',
           email: formData.email.substring(0, 3) + '***', // Log partial email for debugging

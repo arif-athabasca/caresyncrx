@@ -1,7 +1,7 @@
 /**
  * AuthCore Integration Helper
  * 
- * This script adds a compatibility layer between the new auth system and the restored TokenUtil.
+ * This script adds a compatibility layer between the auth system and the restored TokenUtil.
  * It ensures both authentication systems can work together without conflicts.
  * 
  * Copyright (c) 2025 CareSyncRx

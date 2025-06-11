@@ -81,7 +81,8 @@ function NewTriagePage() {
               } catch (refreshError) {
                 console.error('New Triage Page: Error refreshing token:', refreshError);
                 if (window.AuthSession) {
-                  window.AuthSession.redirectToLogin('/admin/triage/new');
+                  window.AuthSession.storeLoginRedirect('/admin/triage/new');
+                  router.push('/login?redirect=/admin/triage/new&source=triage');
                 }
               }
             }
@@ -105,7 +106,8 @@ function NewTriagePage() {
           if (!verifyResponse.ok) {
             console.warn('New Triage Page: Verification request failed, redirecting to login');
             if (window.AuthSession) {
-              window.AuthSession.redirectToLogin('/admin/triage/new');
+              window.AuthSession.storeLoginRedirect('/admin/triage/new');
+              router.push('/login?redirect=/admin/triage/new&source=triage');
             }
           } else {
             console.log('New Triage Page: Verification request successful');
