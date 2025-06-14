@@ -4,7 +4,7 @@
  * Copyright (c) 2025 CareSyncRx
  * MIT License
  *
- * Triage Creation Page - AI-powered patient triage system
+ * Triage Creation Page - AI-powered patient triage system with Speech-to-Text
  */
 
 import { useState, useEffect } from 'react';
@@ -16,9 +16,11 @@ import { UserRole } from '@/enums';
 import { withRoleProtection } from '../../../../auth/components/withRoleProtection';
 import { Card } from '../components/TriageCard';
 import { Badge } from '../components/TriageBadge';
-import { Input, Textarea, Select } from '../components/TriageFormElements';
+import { Input, Select } from '../components/TriageFormElements';
+import { SpeechToTextInput } from '../../../components/ui/SpeechToTextInput';
+import { ProviderSelect, Provider as ProviderType } from '../../../components/ui/ProviderSelect';
 
-// Define interfaces outside of component to keep it clean
+// Define interfaces
 interface Patient {
   id: string;
   name: string;
@@ -49,85 +51,33 @@ function NewTriagePage() {
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
   const [symptoms, setSymptoms] = useState('');
   const [triageSuggestion, setTriageSuggestion] = useState<AISuggestion | null>(null);
-  const [urgencyLevel, setUrgencyLevel] = useState('MEDIUM');  
+  const [urgencyLevel, setUrgencyLevel] = useState('MEDIUM');
+  
+  // Speech-to-text preferences
+  const [speechEnabled, setSpeechEnabled] = useState(true);
+
+  // Provider assignment
+  const [selectedProviderId, setSelectedProviderId] = useState<string>('');
+  const [selectedProvider, setSelectedProvider] = useState<ProviderType | null>(null);
+  const [assignmentReason, setAssignmentReason] = useState('');
+
   // Check authentication on load
   useEffect(() => {
     if (!authLoading && !user) {
-      // Store current path for return after login
       if (typeof window !== 'undefined' && window.AuthSession) {
         window.AuthSession.storeLoginRedirect('/admin/triage/new');
       }
       router.push('/login?redirect=/admin/triage/new&source=triage');
     }
-    
-    // Special authentication check for New Triage page
-    if (typeof window !== 'undefined' && !authLoading && user) {
-      // Define an async function to handle auth checks
-      const performEnhancedAuthChecks = async () => {
-        console.log('New Triage Page: Performing enhanced authentication checks');
-        
-        // First check token validity
-        if (window.AuthCore) {
-          try {
-            const isValid = window.AuthCore.isTokenValid(60); // Check if token is valid with 60s buffer
-            console.log('New Triage Page: Token validity check result:', isValid);
-            
-            // If token is not valid, attempt to refresh it
-            if (!isValid) {
-              console.log('New Triage Page: Refreshing token');
-              try {
-                await window.AuthCore.refreshToken();
-                console.log('New Triage Page: Token refreshed successfully');
-              } catch (refreshError) {
-                console.error('New Triage Page: Error refreshing token:', refreshError);
-                if (window.AuthSession) {
-                  window.AuthSession.storeLoginRedirect('/admin/triage/new');
-                  router.push('/login?redirect=/admin/triage/new&source=triage');
-                }
-              }
-            }
-          } catch (error) {
-            console.error('New Triage Page: Error checking token validity:', error);
-          }
-        }
-        
-        // Verify we can actually access the triage API
-        try {
-          const verifyResponse = await fetch('/api/admin/triage?verify=true', {
-            method: 'HEAD',
-            credentials: 'include',
-            headers: {
-              'Cache-Control': 'no-cache',
-              'Pragma': 'no-cache',
-              'X-Source': 'new-triage-verification'
-            }
-          });
-          
-          if (!verifyResponse.ok) {
-            console.warn('New Triage Page: Verification request failed, redirecting to login');
-            if (window.AuthSession) {
-              window.AuthSession.storeLoginRedirect('/admin/triage/new');
-              router.push('/login?redirect=/admin/triage/new&source=triage');
-            }
-          } else {
-            console.log('New Triage Page: Verification request successful');
-          }
-        } catch (verifyError) {
-          console.error('New Triage Page: Error during verification request:', verifyError);
-        }
-      };
-      
-      // Run the enhanced auth checks
-      performEnhancedAuthChecks();
-    }
   }, [authLoading, user, router]);
 
-  // Mock patient data - in a real app this would be fetched from an API
+  // Sample patient data using actual database IDs from seeded data
   const mockPatients: Patient[] = [
-    { id: 'PT10001', name: 'John Smith', dob: '1975-05-12' },
-    { id: 'PT10002', name: 'Maria Garcia', dob: '1982-11-30' },
-    { id: 'PT10003', name: 'Ahmed Khan', dob: '1968-02-15' },
-    { id: 'PT10004', name: 'Sarah Johnson', dob: '1990-08-22' },
+    { id: 'cmbsuhsf700xjtqrsws6qhxph', name: 'John Smith', dob: '1985-03-15' },
+    { id: 'cmbsuhsfb00xltqrslgk97isj', name: 'Maria Garcia', dob: '1978-07-22' },
+    { id: 'cmbsuhsfc00xntqrs5buq7wrq', name: 'Robert Johnson', dob: '1963-11-08' },
+    { id: 'cmbsuhsfc00xptqrsqzsd8x8n', name: 'Jennifer Davis', dob: '1990-05-30' },
+    { id: 'cmbsuhsfd00xrtqrs06q3mjmg', name: 'Michael Wilson', dob: '1972-09-12' },
   ];
 
   // Filter patients based on search query
@@ -151,41 +101,35 @@ function NewTriagePage() {
     }
     
     try {
-      // Call the AI suggestion API endpoint
       setIsLoading(true);
       
-      // In a real app, this would be a fetch call to an API
-      // For demo purposes, we'll simulate a delay and return mock data
-      setTimeout(() => {
-        setIsLoading(false);
-        setTriageSuggestion({
-          providers: [
-            {
-              id: 'DR001',
-              name: 'Dr. Elena Rodriguez',
-              role: 'Primary Care Physician',
-              specialty: 'Internal Medicine',
-              confidence: 92,
-              reason: 'Symptoms suggest need for general assessment',
-              nextAvailable: '2025-06-12T10:00:00'
-            },
-            {
-              id: 'DR018',
-              name: 'Dr. James Wilson',
-              role: 'Specialist',
-              specialty: 'Cardiology',
-              confidence: 76,
-              reason: 'Potential cardiac involvement based on symptoms',
-              nextAvailable: '2025-06-15T14:30:00'
-            }
-          ],
-          suggestedUrgency: 'MEDIUM',
-          analysis: 'Patient symptoms indicate a non-emergency situation that requires prompt medical attention. The described symptoms could be related to several conditions including respiratory infection, cardiovascular issues, or stress-related manifestations. Recommend primary care assessment with potential cardiology follow-up depending on initial findings.'
-        });
-        
-        // Set the urgency level to the suggested one
-        setUrgencyLevel('MEDIUM');
-      }, 2000);
+      const response = await fetch('/api/admin/triage/suggest', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-cache',
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          patientId: selectedPatient.id,
+          symptoms: symptoms
+        })
+      });
+      
+      if (!response.ok) {
+        throw new Error(`AI suggestion failed: ${response.status}`);
+      }
+      
+      const result = await response.json();
+      
+      setTriageSuggestion({
+        providers: result.data.providers || [],
+        suggestedUrgency: result.data.suggestedUrgency || 'MEDIUM',
+        analysis: result.data.analysis || 'AI analysis completed successfully.'
+      });
+      
+      setUrgencyLevel(result.data.suggestedUrgency || 'MEDIUM');
+      setIsLoading(false);
       
     } catch (error) {
       console.error('Error generating triage suggestion:', error);
@@ -212,15 +156,31 @@ function NewTriagePage() {
     }
     
     try {
-      // In a real app, this would call an API to create the triage record
       setIsLoading(true);
       
-      // Simulate API call
-      setTimeout(() => {
-        setIsLoading(false);
-        alert('Triage created successfully!');
-        router.push('/admin/dashboard?tab=triage');
-      }, 1500);
+      const response = await fetch('/api/admin/triage', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-cache',
+        },
+        credentials: 'include',        body: JSON.stringify({
+          patientId: selectedPatient.id,
+          symptoms: symptoms,
+          urgencyLevel: urgencyLevel,
+          aiSuggestion: triageSuggestion,
+          assignedToId: selectedProviderId || null,
+          assignmentReason: assignmentReason || null
+        })
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Failed to create triage: ${response.status}`);
+      }
+      
+      setIsLoading(false);
+      alert('Triage created successfully!');
+      router.push('/admin/dashboard?tab=triage');
       
     } catch (error) {
       console.error('Error submitting triage:', error);
@@ -228,10 +188,11 @@ function NewTriagePage() {
       alert('Failed to create triage. Please try again.');
     }
   };
-  // Ensure token is fresh before navigating away
+
+  // Navigate with fresh token
   const navigateWithFreshToken = async (path: string) => {
     try {
-      if (window.AuthCore && !window.AuthCore.isTokenValid(300)) { // 5 minute buffer
+      if (typeof window !== 'undefined' && window.AuthCore && !window.AuthCore.isTokenValid(300)) {
         console.log('Refreshing token before navigation');
         await window.AuthCore.refreshToken();
       }
@@ -323,15 +284,18 @@ function NewTriagePage() {
             </Card.Header>
             <Card.Body>
               <div className="space-y-4">
-                <div>
-                  <label className="block mb-1">Patient Symptoms</label>
-                  <Textarea
-                    placeholder="Describe the patient's symptoms in detail..."
-                    rows={5}
-                    value={symptoms}
-                    onChange={(e) => setSymptoms(e.target.value)}
-                  />
-                </div>
+                {/* Speech-to-Text Input Component */}
+                <SpeechToTextInput
+                  value={symptoms}
+                  onChange={setSymptoms}
+                  label="Patient Symptoms"
+                  placeholder="Describe the patient's symptoms in detail..."
+                  rows={5}
+                  showWordCount={true}
+                  speechEnabled={speechEnabled}
+                  onSpeechEnabledChange={setSpeechEnabled}
+                  maxLength={2000}
+                />
                 
                 <div className="flex justify-end">
                   <Button
@@ -399,6 +363,36 @@ function NewTriagePage() {
                             </div>
                           </div>
                         ))}
+                      </div>
+                    </div>
+                    
+                    {/* Provider Assignment Section */}
+                    <div className="border-t pt-4">
+                      <h3 className="font-medium mb-3">Assign to Provider (Optional)</h3>
+                      <div className="space-y-3">                        <ProviderSelect
+                          value={selectedProviderId}
+                          onChange={(providerId, provider) => {
+                            setSelectedProviderId(providerId);
+                            setSelectedProvider(provider);
+                          }}
+                          roles={[UserRole.DOCTOR, UserRole.NURSE, UserRole.PHARMACIST]}
+                          label="Select Provider"
+                          placeholder="Choose a provider to assign this triage..."showStatus={true}
+                          clinicId={user?.clinicId || undefined}
+                        />
+                        
+                        {selectedProvider && (
+                          <div>
+                            <label className="block mb-1 text-sm font-medium">Assignment Reason</label>
+                            <textarea
+                              value={assignmentReason}
+                              onChange={(e) => setAssignmentReason(e.target.value)}
+                              placeholder="Why is this provider being assigned to this case?"
+                              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                              rows={2}
+                            />
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>

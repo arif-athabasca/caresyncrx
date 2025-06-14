@@ -15,6 +15,7 @@ import { Table } from '@/app/components/ui/Table';
 import { Badge } from '@/app/components/ui/Badge';
 import { Tabs, TabPanel } from '@/app/components/ui/Tabs';
 import ClinicalLayout from '@/app/components/layout/ClinicalLayout';
+import { TriageList } from '../triage/components/TriageList';
 import { useRouter, useSearchParams } from 'next/navigation';
 // Import from the central enums directory
 import { UserRole } from '@/enums';
@@ -130,90 +131,11 @@ function AdminDashboardPage() {
 
 // AI Triage Tab Component
 function TriageTab() {
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
+  
   return (
     <div>
-      <Card
-        title="Patient Triage Queue"
-        subtitle="Review and assign patients to appropriate care providers"
-        headerAction={
-          <Button as="a" href="/admin/triage/new" size="sm">
-            New Triage
-          </Button>
-        }
-      >
-        <Table
-          columns={[
-            { header: 'Patient', accessor: 'patient' },
-            { header: 'Symptoms', accessor: 'symptoms' },            {
-              header: 'Urgency',              
-              accessor: (row) => {
-                const urgencyColors: Record<string, BadgeVariant> = {
-                  LOW: 'info',
-                  MEDIUM: 'warning',
-                  HIGH: 'error',
-                  CRITICAL: 'error'
-                };
-                return <Badge variant={urgencyColors[row.urgency]}>{row.urgency}</Badge>;
-              }
-            },{ 
-              header: 'Status', 
-              accessor: (row) => {
-                const statusColors: Record<string, BadgeVariant> = {
-                  PENDING: 'warning',
-                  ASSIGNED: 'info',
-                  IN_PROGRESS: 'primary',
-                  COMPLETED: 'success',
-                  CANCELLED: 'neutral'
-                };
-                return <Badge variant={statusColors[row.status]}>{row.status}</Badge>;
-              }
-            },
-            { header: 'AI Suggestion', accessor: 'aiSuggestion' },
-            { 
-              header: 'Actions', 
-              accessor: (row) => (
-                <div className="flex space-x-2">
-                  <Button size="xs" variant="primary" as="a" href={`/admin/triage/${row.id}`}>
-                    View
-                  </Button>
-                  {row.status === 'PENDING' && (
-                    <Button size="xs" variant="outline" as="a" href={`/admin/triage/${row.id}/assign`}>
-                      Assign
-                    </Button>
-                  )}
-                </div>
-              )
-            },
-          ]}
-          data={[
-            { 
-              id: '1', 
-              patient: 'John Smith',
-              symptoms: 'Chest pain, shortness of breath...',
-              urgency: 'HIGH',
-              status: 'PENDING',
-              aiSuggestion: 'Dr. Cardiology (95%)'
-            },
-            { 
-              id: '2', 
-              patient: 'Jane Doe',
-              symptoms: 'Persistent cough, fever...',
-              urgency: 'MEDIUM',
-              status: 'PENDING',
-              aiSuggestion: 'Dr. Pulmonary (82%)'
-            },
-            { 
-              id: '3', 
-              patient: 'Mike Johnson',
-              symptoms: 'Headache, sensitivity to light...',
-              urgency: 'MEDIUM',
-              status: 'ASSIGNED',
-              aiSuggestion: 'Dr. Neurology (78%)'
-            },
-          ]}
-          keyField="id"
-        />
-      </Card>
+      <TriageList refreshTrigger={refreshTrigger} />
     </div>
   );
 }

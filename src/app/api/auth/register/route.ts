@@ -11,19 +11,30 @@ import { authContainer } from '@/auth/services/container';
 import { RateLimiter } from '@/shared/middleware/rate-limit';
 import { AuditLogger } from '@/shared/services/audit-logger';
 import { UserRole } from '@/auth';
-import { passwordSchema } from '@/auth/utils/password-validator';
+import { passwordValidator } from '@/auth/utils/password-validator';
+
+// Create a Zod schema for password validation
+const passwordZodSchema = z.string().refine((password) => {
+  const result = passwordValidator(password);
+  return result.isValid;
+}, (password) => {
+  const result = passwordValidator(password);
+  return {
+    message: result.errors[0] || 'Password does not meet security requirements'
+  };
+});
 
 // Registration input validation schema
 const registerSchema = z.object({
+  firstName: z.string().min(2, 'First name must be at least 2 characters').max(50, 'First name must be less than 50 characters'),
+  lastName: z.string().min(2, 'Last name must be at least 2 characters').max(50, 'Last name must be less than 50 characters'),
   email: z.string().email('Invalid email address format'),
-  password: passwordSchema,
+  password: passwordZodSchema,
   role: z.nativeEnum(UserRole, {
     errorMap: () => ({ message: 'Invalid role' })
   }),
   clinicId: z.string().min(1, 'Clinic ID is required'),
-  agreeToTerms: z.boolean().refine(val => val === true, {
-    message: 'You must agree to the terms and conditions'
-  })
+  deviceId: z.string().optional() // Device ID is optional and added by client
 });
 
 /**
@@ -40,22 +51,23 @@ export async function POST(request: NextRequest) {
 
     if (rateLimitResponse) {
       return rateLimitResponse;
-    }
-
-    // Parse and validate request body
+    }    // Parse and validate request body
     const body = await request.json();
+    
+    console.log('Registration request body:', JSON.stringify(body, null, 2));
     
     try {
       registerSchema.parse(body);
     } catch (err) {
+      console.error('Zod validation error:', err);
       if (err instanceof z.ZodError) {
         return NextResponse.json(
-          { error: err.errors[0].message },
+          { error: err.errors[0].message, field: err.errors[0].path.join('.') },
           { status: 400 }
         );
       }
       throw err;
-    }    const { email, password, role, clinicId } = body;
+    }    const { firstName, lastName, email, password, role, clinicId } = body;
 
     // Get client info for security tracking
     const ipAddress = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown';
@@ -64,6 +76,8 @@ export async function POST(request: NextRequest) {
     // Register the user with auth service
     const authService = authContainer.getAuthService();
     const result = await authService.register({
+      firstName,
+      lastName,
       email,
       password,
       role,

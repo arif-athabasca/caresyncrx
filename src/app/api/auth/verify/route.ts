@@ -4,9 +4,9 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getAuthCookies } from '../../../shared/utils/cookie-util';
-import { TokenUtil } from '../../../auth/utils/token-util';
-import { TokenType } from '../../../auth/enums';
+import { getAuthCookies } from '../../../../shared/utils/cookie-util';
+import { TokenUtil } from '../../../../auth/utils/token-util';
+import { TokenType } from '../../../../auth/enums';
 
 export async function GET(request: NextRequest) {
   try {

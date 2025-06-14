@@ -18,6 +18,7 @@ export { Hero } from './Hero';
 export { Modal } from './Modal';
 export { Pagination } from './Pagination';
 export { Progress } from './Progress';
+export { ProviderSelect } from './ProviderSelect';
 export { Table } from './Table';
 export { Tooltip } from './Tooltip';
 
@@ -31,5 +32,6 @@ export type { HeroProps } from './Hero';
 export type { ModalProps } from './Modal';
 export type { PaginationProps } from './Pagination';
 export type { ProgressProps } from './Progress';
+export type { ProviderSelectProps, Provider } from './ProviderSelect';
 export type { TableProps, Column } from './Table';
 export type { TooltipProps } from './Tooltip';

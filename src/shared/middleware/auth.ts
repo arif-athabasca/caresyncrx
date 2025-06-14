@@ -236,12 +236,11 @@ export async function authMiddleware(request: NextRequest) {
 
     // Get additional user data for high security routes
     if (isHighSecurityPath(pathname)) {      
-      const userId = (payload as any).id;
-      const user = await prisma.user.findUnique({
+      const userId = (payload as any).id;      const user = await prisma.user.findUnique({
         where: { id: userId },
         include: {
-          refreshTokens: true,
-          devices: {
+          RefreshToken: true,
+          UserDevice: {
             where: { deviceId: (payload as any).deviceId || '' }
           }
         }
@@ -250,9 +249,8 @@ export async function authMiddleware(request: NextRequest) {
       if (!user) {
         throw new Error('User not found');
       }      
-      
       // Check if session is active and not expired
-      const hasValidSession = user.refreshTokens.some(token => 
+      const hasValidSession = user.RefreshToken.some(token => 
         token.token.includes(accessToken.substring(accessToken.length - 10)) && 
         new Date(token.expiresAt) > new Date() &&
         token.isValid
@@ -263,7 +261,7 @@ export async function authMiddleware(request: NextRequest) {
       }
       
       // For high security paths, verify this is a known device with active status
-      if (user.devices.length === 0 || user.devices[0].status !== DeviceStatus.ACTIVE) {
+      if (user.UserDevice.length === 0 || user.UserDevice[0].status !== DeviceStatus.ACTIVE) {
         // Log suspicious activity for unknown or inactive device
         const { AuthSecurityLogger } = require('../../auth/services/utils/auth-security-logger');
         await AuthSecurityLogger.log({

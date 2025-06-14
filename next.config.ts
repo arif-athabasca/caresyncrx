@@ -11,12 +11,22 @@ const nextConfig: NextConfig = {
     // For better chunk handling
     optimizeCss: true,
   },
+  // HTTPS support for development (needed for speech recognition)
+  ...(process.env.NODE_ENV === 'development' && process.env.HTTPS === 'true' && {
+    server: {
+      https: true,
+    },
+  }),
   images: {
     domains: ['localhost'],
     remotePatterns: [
       {
         protocol: 'https',
         hostname: '**',
+      },
+      {
+        protocol: 'http', 
+        hostname: 'localhost',
       },
     ],
   },

@@ -79,6 +79,8 @@ export class AuthService implements IAuthService {
     }    // Create the user
     const userData: any = {
       id: uuidv4(),
+      firstName: data.firstName,
+      lastName: data.lastName,
       email: data.email,
       password: hashedPassword,
       role: data.role ? (data.role === UserRole.PATIENT ? 'NURSE' as any : data.role as any) : 'GUEST' as any, // Convert PATIENT to NURSE since Prisma schema doesn't have PATIENT
@@ -86,11 +88,10 @@ export class AuthService implements IAuthService {
       backupCodes: [],
       passwordExpiresAt,
       lastPasswordChange: new Date(),
-    };
-
-    // Only add clinic if clinicId is provided
+      updatedAt: new Date(),
+    };    // Only add clinic if clinicId is provided
     if (data.clinicId) {
-      userData.clinic = {
+      userData.Clinic = {
         connect: { id: data.clinicId }
       };
     }
@@ -403,10 +404,9 @@ export class AuthService implements IAuthService {
           isValid: true,
           expiresAt: {
             gt: new Date()
-          }
-        },
+          }        },
         include: {
-          user: true
+          User: true
         }
       });
       
@@ -415,10 +415,9 @@ export class AuthService implements IAuthService {
           tokenId: tokenClaims && typeof tokenClaims === 'object' ? (tokenClaims as any).id : 'unknown'
         });
         throw new Error('Refresh token not found or expired');
-      }
-      
+      }      
       // Check user exists
-      if (!storedToken.user) {
+      if (!storedToken.User) {
         await this.invalidateRefreshToken(refreshToken);
         
         await AuditLogger.log({
@@ -460,12 +459,11 @@ export class AuthService implements IAuthService {
         });
         
         // No error thrown - we're allowing the refresh despite the mismatch
-      }
-        // Generate new tokens
+      }        // Generate new tokens
       const newTokens = TokenUtil.generateTokens({
-        id: storedToken.user.id,
-        email: storedToken.user.email,
-        role: storedToken.user.role as unknown as UserRole
+        id: storedToken.User.id,
+        email: storedToken.User.email,
+        role: storedToken.User.role as unknown as UserRole
       }, deviceId) as TokenPair;
       
       // Invalidate old token and store new one

@@ -18,8 +18,11 @@ import { deviceIdentity } from '../utils/device-identity';
 // Define user data structure
 interface User {
   id: string;
+  firstName: string;
+  lastName: string;
   email: string;
   role: UserRole;
+  clinicId: string;
   twoFactorEnabled?: boolean;
 }
 
@@ -42,7 +45,7 @@ interface AuthContextType {
   isAuthenticated: boolean;
   login: (email: string, password: string, deviceId?: string) => Promise<LoginResult>;
   verify2FALogin: (tempToken: string, code: string, rememberMe?: boolean) => Promise<{ success: boolean; error?: string }>;
-  register: (email: string, password: string, role: UserRole, clinicId: string) => Promise<LoginResult>;
+  register: (firstName: string, lastName: string, email: string, password: string, role: UserRole, clinicId: string) => Promise<LoginResult>;
   logout: () => Promise<void>;
   refreshToken: (refreshToken: string, deviceId?: string) => Promise<{ accessToken: string; refreshToken: string }>;
   clearError: () => void;
@@ -347,11 +350,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
       setIsLoading(false);
     }
   }, []);
-
   /**
    * Register a new user
    */
   const register = useCallback(async (
+    firstName: string,
+    lastName: string,
     email: string,
     password: string,
     role: UserRole,
@@ -368,11 +372,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
       } catch (e) {
         console.warn('Error getting device ID during registration:', e);
       }
-      
-      const response = await fetch('/api/auth/register', {
+        const response = await fetch('/api/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
+          firstName,
+          lastName,
           email, 
           password, 
           role, 

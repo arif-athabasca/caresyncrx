@@ -36,8 +36,12 @@ function LoginContent() {
   const { login, isLoading } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
-    // Get redirect URL from query params if present
-  const redirect = searchParams.get('redirect') || '/dashboard';  // Check if user was logged out due to session timeout
+  
+  // Local form loading state (separate from auth loading)
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  // Get redirect URL from query params if present
+  const redirect = searchParams.get('redirect') || '/dashboard';// Check if user was logged out due to session timeout
   const timeout = searchParams.get('timeout');
   const error = searchParams.get('error');
   const tokenExpired = searchParams.get('token_expired');
@@ -75,7 +79,15 @@ function LoginContent() {
       });
     }
   }, [timeout, error, tokenExpired]);
-  
+    // Check if form is valid for button enabling
+  const isFormValid = () => {
+    return (
+      formData.email.trim().length > 0 &&
+      /\S+@\S+\.\S+/.test(formData.email) &&
+      formData.password.length > 0
+    );
+  };
+
   // Handle form field changes
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value, type, checked } = e.target;
@@ -112,8 +124,7 @@ function LoginContent() {
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
-  
-  // Handle form submission
+    // Handle form submission
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     
@@ -124,6 +135,9 @@ function LoginContent() {
     if (!validateForm()) {
       return;
     }
+    
+    // Set local loading state
+    setIsSubmitting(true);
     
     try {
       // Attempt login
@@ -215,11 +229,13 @@ function LoginContent() {
             form: 'Authentication failed. Please try again.'
           });
         }
-      } else {
-        setErrors({
+      } else {        setErrors({
           form: 'An unexpected error occurred. Please try again.'
         });
       }
+    } finally {
+      // Always reset loading state
+      setIsSubmitting(false);
     }
   };
   
@@ -308,13 +324,13 @@ function LoginContent() {
           <Link href="/forgot-password" className="text-sm text-primary-600 hover:text-primary-500">
             Forgot password?
           </Link>
-        </div>
-        <div className="mt-6">
+        </div>        <div className="mt-6">
           <Button
             type="submit"
-            disabled={isLoading}
-            isLoading={isLoading}
-            fullWidth          >
+            disabled={isSubmitting || !isFormValid()}
+            isLoading={isSubmitting}
+            fullWidth
+          >
             Sign in
           </Button>
         </div>

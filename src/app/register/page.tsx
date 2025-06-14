@@ -19,27 +19,48 @@ import { UserRole } from '../../enums'; // Importing directly from central enums
 import { passwordValidator } from '../../auth/utils/password-validator';
 
 export default function RegisterPage() {
-  const { register, isLoading } = useAuth();
+  const { register, isLoading: authLoading } = useAuth();
   const router = useRouter();
-
-  // Form state
+  
+  // Local form loading state (separate from auth loading)
+  const [isSubmitting, setIsSubmitting] = useState(false);  // Form state
   const [formData, setFormData] = useState({
-    email: '',
-    password: '',
+    firstName: '',
+    lastName: '',
+    email: '',    password: '',
     confirmPassword: '',
     role: UserRole.NURSE as UserRole, // Default role
-    clinicId: '', // This would ideally come from a clinic selection dropdown
+    clinicId: '', // Empty by default - user must enter valid clinic ID
     agreeToTerms: false
   });
 
   const [errors, setErrors] = useState<{
+    firstName?: string;
+    lastName?: string;
     email?: string;
     password?: string;
     confirmPassword?: string;
     clinicId?: string;
     agreeToTerms?: string;
     form?: string;
-  }>({});
+  }>({});  // Check if form is valid for button enabling
+  const isFormValid = () => {
+    // Check basic field requirements
+    const basicFieldsValid = (
+      formData.firstName.trim().length >= 2 &&
+      formData.lastName.trim().length >= 2 &&
+      formData.email.trim().length > 0 &&
+      /\S+@\S+\.\S+/.test(formData.email) &&
+      formData.confirmPassword === formData.password &&
+      formData.clinicId.trim().length > 0 &&
+      formData.agreeToTerms
+    );
+
+    // Check password validation
+    const passwordValidation = passwordValidator(formData.password);
+    
+    return basicFieldsValid && passwordValidation.isValid;
+  };
 
   // Handle form field changes
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -59,10 +80,23 @@ export default function RegisterPage() {
       });
     }
   };
-
   // Validate form fields
   const validateForm = () => {
     const newErrors: typeof errors = {};
+    
+    // Validate first name
+    if (!formData.firstName) {
+      newErrors.firstName = 'First name is required';
+    } else if (formData.firstName.length < 2) {
+      newErrors.firstName = 'First name must be at least 2 characters';
+    }
+    
+    // Validate last name
+    if (!formData.lastName) {
+      newErrors.lastName = 'Last name is required';
+    } else if (formData.lastName.length < 2) {
+      newErrors.lastName = 'Last name must be at least 2 characters';
+    }
     
     // Validate email
     if (!formData.email) {
@@ -80,13 +114,12 @@ export default function RegisterPage() {
     if (formData.password !== formData.confirmPassword) {
       newErrors.confirmPassword = 'Passwords do not match';
     }
-    
-    // Validate clinic ID
+      // Validate clinic ID
     if (!formData.clinicId) {
       newErrors.clinicId = 'Clinic ID is required';
     }
     
-    // Validate terms agreement
+    // Validate terms agreement (client-side only, not sent to server)
     if (!formData.agreeToTerms) {
       newErrors.agreeToTerms = 'You must agree to the Terms and Conditions';
     }
@@ -94,7 +127,6 @@ export default function RegisterPage() {
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
-
   // Handle form submission
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -106,10 +138,15 @@ export default function RegisterPage() {
     if (!validateForm()) {
       return;
     }
+
+    // Set local loading state
+    setIsSubmitting(true);
     
     try {
       // Register the user
       const result = await register(
+        formData.firstName,
+        formData.lastName,
         formData.email,
         formData.password,
         formData.role,
@@ -141,18 +178,37 @@ export default function RegisterPage() {
             form: 'Registration failed. Please try again.'
           });
         }
-      } else {
-        setErrors({
+      } else {        setErrors({
           form: 'An unexpected error occurred. Please try again.'
         });
       }
+    } finally {
+      // Always reset loading state
+      setIsSubmitting(false);
     }
+  };
+  // Get password validation status for display
+  const getPasswordValidationStatus = () => {
+    const validation = passwordValidator(formData.password);
+    return {
+      isValid: validation.isValid,
+      errors: validation.errors
+    };
   };
 
   // Password requirements help text
-  const passwordRequirements = 
-    'Password must be at least 12 characters and include an uppercase letter, ' +
-    'lowercase letter, number, and special character.';
+  const passwordRequirements = (() => {
+    const status = getPasswordValidationStatus();
+    if (formData.password.length === 0) {
+      return 'Password must be at least 12 characters and include an uppercase letter, lowercase letter, number, and special character.';
+    }
+    
+    if (status.isValid) {
+      return '✅ Password meets all requirements';
+    }
+    
+    return `❌ ${status.errors.join(', ')}`;
+  })();
 
   return (
     <AuthCard
@@ -175,8 +231,41 @@ export default function RegisterPage() {
           <p>{errors.form}</p>
         </Alert>
       )}
-      
-      <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4">
+        <AuthInput
+          id="firstName"
+          name="firstName"
+          label="First Name"
+          value={formData.firstName}
+          onChange={handleChange}
+          autoComplete="given-name"
+          placeholder="John"
+          required
+          error={errors.firstName}
+          icon={
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+              <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
+            </svg>
+          }
+        />
+
+        <AuthInput
+          id="lastName"
+          name="lastName"
+          label="Last Name"
+          value={formData.lastName}
+          onChange={handleChange}
+          autoComplete="family-name"
+          placeholder="Doe"
+          required
+          error={errors.lastName}
+          icon={
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+              <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
+            </svg>
+          }
+        />
+
         <AuthInput
           id="email"
           name="email"
@@ -282,8 +371,8 @@ export default function RegisterPage() {
         </div>        <div className="mt-6">
           <Button
             type="submit"
-            disabled={isLoading}
-            isLoading={isLoading}
+            disabled={isSubmitting || !isFormValid()}
+            isLoading={isSubmitting}
             fullWidth
           >
             Create Account
