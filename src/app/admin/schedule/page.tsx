@@ -8,7 +8,7 @@
  */
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import ClinicalLayout from '@/app/components/layout/ClinicalLayout';
 import { Button } from '@/app/components/ui/Button';
 import { useAuth } from '@/auth/hooks/useAuth';
@@ -72,6 +72,7 @@ interface TriageAssignment {
 function SchedulerDashboard() {
   const { user, isLoading: authLoading } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
   
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [selectedProvider, setSelectedProvider] = useState<string>('');
@@ -80,62 +81,87 @@ function SchedulerDashboard() {
   const [assignments, setAssignments] = useState<TriageAssignment[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
+  // Handle URL parameters
+  useEffect(() => {
+    const providerEmail = searchParams.get('provider');
+    if (providerEmail && providers.length > 0) {
+      const provider = providers.find(p => p.email === providerEmail);
+      if (provider) {
+        setSelectedProvider(provider.id);
+        setViewMode('calendar'); // Switch to calendar view to show the provider's schedule
+      }
+    }
+  }, [searchParams, providers]);
+
   useEffect(() => {
     if (!authLoading && user) {
       fetchScheduleData();
       fetchTriageAssignments();
     }
-  }, [authLoading, user, selectedDate]);
-  const fetchScheduleData = async () => {
+  }, [authLoading, user, selectedDate]);  const fetchScheduleData = async () => {
     try {
       setIsLoading(true);
-      const response = await fetch(`/api/admin/schedule?date=${selectedDate}`, {
+      
+      // Fetch schedule slots
+      const scheduleResponse = await fetch(`/api/admin/schedule?date=${selectedDate}`, {
         credentials: 'include',
         headers: { 'Cache-Control': 'no-cache' }
       });
 
-      if (response.ok) {
-        const result = await response.json();
-        const responseData = result.data || {};
+      // Fetch all providers (same endpoint as triage page uses)
+      const providersResponse = await fetch('/api/admin/providers', {
+        credentials: 'include',
+        headers: { 'Cache-Control': 'no-cache' }
+      });
+
+      if (scheduleResponse.ok && providersResponse.ok) {
+        const scheduleResult = await scheduleResponse.json();
+        const providersResult = await providersResponse.json();
         
-        // Group slots by provider to create providers array
+        const responseData = scheduleResult.data || {};
+        const allProviders = providersResult.providers || [];
+        
+        // Create a map of providers with their basic info
         const providersMap = new Map<string, Provider>();
         
+        // Initialize all providers first
+        allProviders.forEach((provider: any) => {
+          providersMap.set(provider.id, {
+            id: provider.id,
+            email: provider.email,
+            role: provider.role,
+            specialties: provider.specialty ? [{ specialty: provider.specialty, expertise: [] }] : [],
+            scheduleSlots: [],
+            workload: {
+              totalSlots: 0,
+              bookedSlots: 0,
+              availableSlots: 0,
+              utilizationRate: 0
+            }
+          });
+        });
+        
+        // Add schedule slots to providers
         if (responseData.slots && Array.isArray(responseData.slots)) {
           responseData.slots.forEach((slot: any) => {
             if (!slot.provider) return;
             
             const providerId = slot.provider.id;
-            if (!providersMap.has(providerId)) {
-              providersMap.set(providerId, {
-                id: providerId,
-                email: slot.provider.email || '',
-                role: slot.provider.role || '',
-                specialties: Array.isArray(slot.provider.specialties) ? 
-                  slot.provider.specialties.map((s: string) => ({ specialty: s, expertise: [] })) : 
-                  [],
-                scheduleSlots: [],
-                workload: {
-                  totalSlots: 0,
-                  bookedSlots: 0,
-                  availableSlots: 0,
-                  utilizationRate: 0
-                }
+            const provider = providersMap.get(providerId);
+            
+            if (provider) {
+              provider.scheduleSlots.push({
+                id: slot.id,
+                startTime: slot.startTime,
+                endTime: slot.endTime,
+                appointmentType: slot.appointmentType || '',
+                status: slot.status || 'AVAILABLE',
+                description: slot.description,
+                location: slot.location,
+                patient: slot.patient,
+                triage: slot.triage
               });
             }
-            
-            const provider = providersMap.get(providerId)!;
-            provider.scheduleSlots.push({
-              id: slot.id,
-              startTime: slot.startTime,
-              endTime: slot.endTime,
-              appointmentType: slot.appointmentType || '',
-              status: slot.status || 'AVAILABLE',
-              description: slot.description,
-              location: slot.location,
-              patient: slot.patient,
-              triage: slot.triage
-            });
           });
         }
         
@@ -198,7 +224,6 @@ function SchedulerDashboard() {
       default: return 'info';
     }
   };
-
   const formatTime = (dateString: string) => {
     return new Date(dateString).toLocaleTimeString('en-US', {
       hour: '2-digit',
@@ -206,15 +231,44 @@ function SchedulerDashboard() {
       hour12: true
     });
   };
-  const renderCalendarView = () => {
+
+  // Helper function to properly filter slots for a given date (consistent across all views)
+  const getProviderSlotsForDate = (provider: Provider, targetDate: string) => {
+    return Array.isArray(provider.scheduleSlots) ? provider.scheduleSlots.filter(slot => {
+      const slotDate = new Date(slot.startTime);
+      const selectedDateObj = new Date(targetDate);
+      
+      return (
+        slotDate.getFullYear() === selectedDateObj.getFullYear() &&
+        slotDate.getMonth() === selectedDateObj.getMonth() &&
+        slotDate.getDate() === selectedDateObj.getDate()
+      );
+    }) : [];
+  };
+    const renderCalendarView = () => {
     const timeSlots = Array.from({ length: 16 }, (_, i) => i + 8); // 8 AM to 11 PM
     const filteredProviders = Array.isArray(providers) ? providers.filter(p => !selectedProvider || p.id === selectedProvider) : [];
     
-    // Get all slots for the selected date grouped by hour
+    // Filter assignments based on selected provider
+    const filteredAssignments = selectedProvider
+      ? assignments.filter(a => {
+          const provider = providers.find(p => p.id === selectedProvider);
+          return provider && a.assignedTo?.email === provider.email;
+        })
+      : assignments;
+      // Get all slots for the selected date grouped by hour
     const getSlotsByHour = (provider: Provider, hour: number) => {
       return Array.isArray(provider.scheduleSlots) ? provider.scheduleSlots.filter(slot => {
         const slotDate = new Date(slot.startTime);
-        return slot.startTime.startsWith(selectedDate) && slotDate.getHours() === hour;
+        const selectedDateObj = new Date(selectedDate);
+        
+        // Check if the slot is on the selected date and at the specified hour
+        return (
+          slotDate.getFullYear() === selectedDateObj.getFullYear() &&
+          slotDate.getMonth() === selectedDateObj.getMonth() &&
+          slotDate.getDate() === selectedDateObj.getDate() &&
+          slotDate.getHours() === hour
+        );
       }) : [];
     };
 
@@ -230,8 +284,7 @@ function SchedulerDashboard() {
                 month: 'long', 
                 day: 'numeric' 
               })}
-            </h3>
-            <div className="flex items-center space-x-4">
+            </h3>            <div className="flex items-center space-x-4">
               <div className="flex items-center space-x-2">
                 <div className="w-3 h-3 bg-green-400 rounded"></div>
                 <span className="text-sm text-gray-600">Available</span>
@@ -355,39 +408,84 @@ function SchedulerDashboard() {
               ))}
             </div>
           </div>
-        </div>
-
-        {/* Provider Summary Cards */}
+        </div>        {/* Provider Summary Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {filteredProviders.map(provider => {
-            const todaySlots = provider.scheduleSlots.filter(slot => slot.startTime.startsWith(selectedDate));
+            const todaySlots = getProviderSlotsForDate(provider, selectedDate);
             const bookedSlots = todaySlots.filter(slot => slot.status === 'BOOKED');
             const availableSlots = todaySlots.filter(slot => slot.status === 'AVAILABLE');
+            const blockedSlots = todaySlots.filter(slot => slot.status === 'BLOCKED');
+            
+            // Calculate utilization rate
+            const utilizationRate = todaySlots.length > 0 ? (bookedSlots.length / todaySlots.length) * 100 : 0;
+            
+            // Helper to truncate long text elegantly
+            const truncateText = (text: string, maxLength: number) => {
+              return text.length > maxLength ? text.substring(0, maxLength) + '...' : text;
+            };
+
+            // Get provider display name and specialty (truncated if needed)
+            const providerName = truncateText(provider.email.split('@')[0], 16);
+            const specialty = provider.specialties.length > 0 
+              ? truncateText(provider.specialties.map(s => s.specialty).join(', '), 20)
+              : 'General Practice';
             
             return (
-              <div key={provider.id} className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-                <div className="flex items-center justify-between mb-3">
-                  <div>
-                    <h4 className="font-semibold text-gray-900">{provider.email.split('@')[0]}</h4>
-                    <p className="text-sm text-gray-600">{provider.role}</p>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-lg font-bold text-blue-600">{bookedSlots.length}</div>
-                    <div className="text-xs text-gray-500">Appointments</div>
+              <div key={provider.id} className="workload-card bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden hover-lift transition-all duration-300">
+                {/* Provider Header with Bottle Green */}
+                <div className="bg-gradient-to-r from-emerald-700 to-emerald-800 px-4 py-3 text-white">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex-1 min-w-0">
+                      <h4 className="font-semibold text-white text-sm no-break text-overflow-ellipsis" title={provider.email.split('@')[0]}>
+                        {providerName}
+                      </h4>
+                      <p className="text-emerald-100 text-xs no-break line-clamp-1" title={specialty}>
+                        {specialty}
+                      </p>
+                      <p className="text-emerald-200 text-xs no-break">{provider.role}</p>
+                    </div>
+                    <div className="text-right flex-shrink-0">
+                      <div className="text-lg font-bold text-white no-break">
+                        {bookedSlots.length}
+                      </div>
+                      <div className="text-emerald-100 text-xs whitespace-nowrap">Appointments</div>
+                    </div>
                   </div>
                 </div>
-                <div className="grid grid-cols-3 gap-2 text-center text-xs">
-                  <div className="bg-blue-50 p-2 rounded">
-                    <div className="font-bold text-blue-600">{todaySlots.length}</div>
-                    <div className="text-blue-600">Total</div>
+                
+                {/* Stats Grid */}
+                <div className="p-4">
+                  <div className="grid grid-cols-4 gap-2 text-center text-xs">
+                    <div className="bg-blue-50 p-2 rounded border border-blue-200">
+                      <div className="font-bold text-blue-700">{todaySlots.length}</div>
+                      <div className="text-blue-600 leading-tight">Total</div>
+                    </div>
+                    <div className="bg-green-50 p-2 rounded border border-green-200">
+                      <div className="font-bold text-green-700">{availableSlots.length}</div>
+                      <div className="text-green-600 leading-tight">Available</div>
+                    </div>
+                    <div className="bg-emerald-50 p-2 rounded border border-emerald-200">
+                      <div className="font-bold text-emerald-700">{bookedSlots.length}</div>
+                      <div className="text-emerald-600 leading-tight">Booked</div>
+                    </div>
+                    <div className="bg-red-50 p-2 rounded border border-red-200">
+                      <div className="font-bold text-red-700">{blockedSlots.length}</div>
+                      <div className="text-red-600 leading-tight">Blocked</div>
+                    </div>
                   </div>
-                  <div className="bg-green-50 p-2 rounded">
-                    <div className="font-bold text-green-600">{availableSlots.length}</div>
-                    <div className="text-green-600">Available</div>
-                  </div>
-                  <div className="bg-red-50 p-2 rounded">
-                    <div className="font-bold text-red-600">{bookedSlots.length}</div>
-                    <div className="text-red-600">Booked</div>
+                  
+                  {/* Utilization Bar */}
+                  <div className="mt-3">
+                    <div className="flex justify-between items-center mb-1">
+                      <span className="text-xs font-medium text-gray-700">Utilization</span>
+                      <span className="text-xs font-bold text-gray-900">{utilizationRate.toFixed(0)}%</span>
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
+                      <div
+                        className="h-2 rounded-full bg-emerald-600 transition-all duration-500"
+                        style={{ width: `${Math.min(100, utilizationRate)}%` }}
+                      />
+                    </div>
                   </div>
                 </div>
               </div>
@@ -396,9 +494,10 @@ function SchedulerDashboard() {
         </div>
       </div>
     );
-  };
-  const renderWorkloadView = () => {
-    if (!Array.isArray(providers) || providers.length === 0) {
+  };  const renderWorkloadView = () => {
+    const filteredProviders = Array.isArray(providers) ? providers.filter(p => !selectedProvider || p.id === selectedProvider) : [];
+    
+    if (filteredProviders.length === 0) {
       return (
         <div className="text-center py-8 text-gray-500">
           <div className="text-4xl mb-3">📊</div>
@@ -406,64 +505,74 @@ function SchedulerDashboard() {
           <div className="text-sm">No provider workload information found for this date</div>
         </div>
       );
-    }
-
-    return (
+    }    return (
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-        {providers.map(provider => {
-          const utilizationRate = Number(provider.workload.utilizationRate) || 0;
-          const getUtilizationColor = (rate: number) => {
+        {filteredProviders.map(provider => {
+          // Calculate actual slot counts for the selected date
+          const todaySlots = getProviderSlotsForDate(provider, selectedDate);
+          const totalSlots = todaySlots.length;
+          const bookedSlots = todaySlots.filter(slot => slot.status === 'BOOKED').length;
+          const availableSlots = todaySlots.filter(slot => slot.status === 'AVAILABLE').length;
+          const blockedSlots = todaySlots.filter(slot => slot.status === 'BLOCKED').length;
+          
+          // Calculate actual utilization rate for today
+          const utilizationRate = totalSlots > 0 ? (bookedSlots / totalSlots) * 100 : 0;
+            const getUtilizationColor = (rate: number) => {
             if (rate >= 90) return 'bg-red-500';
-            if (rate >= 70) return 'bg-yellow-500';
-            if (rate >= 40) return 'bg-blue-500';
-            return 'bg-green-500';
-          };
-          const getUtilizationBg = (rate: number) => {
-            if (rate >= 90) return 'from-red-500 to-red-600';
-            if (rate >= 70) return 'from-yellow-500 to-yellow-600';
-            if (rate >= 40) return 'from-blue-500 to-blue-600';
-            return 'from-green-500 to-green-600';
+            if (rate >= 70) return 'bg-amber-500';
+            if (rate >= 40) return 'bg-emerald-500';
+            return 'bg-emerald-600';
+          };const getUtilizationBg = (rate: number) => {
+            if (rate >= 90) return 'from-red-600 to-red-700';
+            if (rate >= 70) return 'from-amber-600 to-amber-700';
+            if (rate >= 40) return 'from-emerald-600 to-emerald-700';
+            return 'from-emerald-700 to-emerald-800';
           };
 
-          return (
-            <div key={provider.id} className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden hover:shadow-xl transition-all duration-300">
-              {/* Provider Header */}
-              <div className={`bg-gradient-to-r ${getUtilizationBg(utilizationRate)} px-6 py-5 text-white`}>
-                <div className="flex justify-between items-start">
-                  <div className="flex-1">
-                    <h3 className="text-xl font-bold mb-1 text-white">{provider.email.split('@')[0]}</h3>
-                    <p className="text-white text-sm mb-2">
-                      {provider.specialties.length > 0 
-                        ? provider.specialties.map(s => s.specialty).join(', ')
-                        : 'General Practice'
-                      }
-                    </p>
-                    <Badge variant="secondary" className="bg-white/20 text-white border-white/30 text-xs">
+          // Helper to truncate long text elegantly
+          const truncateText = (text: string, maxLength: number) => {
+            return text.length > maxLength ? text.substring(0, maxLength) + '...' : text;
+          };
+
+          // Get provider display name (truncated if needed)
+          const providerName = truncateText(provider.email.split('@')[0], 20);
+          const specialty = provider.specialties.length > 0 
+            ? truncateText(provider.specialties.map(s => s.specialty).join(', '), 25)
+            : 'General Practice';          return (
+            <div key={provider.id} className="workload-card bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden hover-lift transition-all duration-300 min-h-[480px] flex flex-col">
+              {/* Provider Header - Fixed Height */}
+              <div className={`bg-gradient-to-r ${getUtilizationBg(utilizationRate)} px-5 py-4 text-white flex-shrink-0`}>
+                <div className="flex justify-between items-start gap-3">
+                  <div className="flex-1 min-w-0">
+                    <h3 className="text-lg font-bold mb-1 text-white no-break text-overflow-ellipsis" title={provider.email.split('@')[0]}>
+                      {providerName}
+                    </h3>
+                    <p className="text-white text-xs mb-2 line-clamp-2 leading-relaxed no-break" title={provider.specialties.map(s => s.specialty).join(', ')}>
+                      {specialty}
+                    </p>                    <Badge variant="secondary" className="bg-white/20 text-white border-white/30 text-xs px-2 py-1 no-break">
                       {provider.role}
                     </Badge>
                   </div>
-                  <div className="text-right">
-                    <div className="text-3xl font-bold mb-1 text-white">
+                  <div className="text-right flex-shrink-0">
+                    <div className="text-2xl font-bold mb-1 text-white no-break">
                       {utilizationRate.toFixed(0)}%
                     </div>
-                    <div className="text-white text-xs">Utilization</div>
+                    <div className="text-white text-xs whitespace-nowrap">Utilization</div>
                   </div>
                 </div>
-              </div>
-
-              {/* Workload Content */}
-              <div className="p-6">
+              </div>{/* Workload Content - Flexible Layout */}
+              <div className="p-5 flex-1 flex flex-col">
                 {/* Utilization Bar */}
-                <div className="mb-6">
+                <div className="mb-5">
                   <div className="flex justify-between items-center mb-2">
                     <span className="text-sm font-medium text-gray-700">Capacity Usage</span>
                     <span className="text-sm font-bold text-gray-900">
                       {utilizationRate.toFixed(1)}%
                     </span>
                   </div>
-                  <div className="w-full bg-gray-200 rounded-full h-4 overflow-hidden">
+                  <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
                     <div
-                      className={`h-4 rounded-full transition-all duration-500 ${getUtilizationColor(utilizationRate)}`}
+                      className={`h-3 rounded-full transition-all duration-500 ${getUtilizationColor(utilizationRate)}`}
                       style={{ width: `${Math.min(100, utilizationRate)}%` }}
                     />
                   </div>
@@ -474,70 +583,81 @@ function SchedulerDashboard() {
                   </div>
                 </div>
 
-                {/* Slot Statistics */}
-                <div className="grid grid-cols-3 gap-3 mb-6">
-                  <div className="bg-gradient-to-br from-blue-50 to-blue-100 p-4 rounded-xl text-center border border-blue-200">
-                    <div className="text-2xl font-bold text-blue-700 mb-1">
-                      {provider.workload.totalSlots}
+                {/* Slot Statistics - Responsive Grid */}
+                <div className="grid grid-cols-2 gap-2 mb-5">
+                  <div className="bg-gradient-to-br from-blue-50 to-blue-100 p-3 rounded-xl text-center border border-blue-200">
+                    <div className="text-xl font-bold text-blue-700 mb-1">
+                      {totalSlots}
                     </div>
-                    <div className="text-xs text-blue-600 font-medium">Total Slots</div>
+                    <div className="text-xs text-blue-600 font-medium leading-tight">Total</div>
                   </div>
-                  <div className="bg-gradient-to-br from-green-50 to-green-100 p-4 rounded-xl text-center border border-green-200">
-                    <div className="text-2xl font-bold text-green-700 mb-1">
-                      {provider.workload.availableSlots}
+                  <div className="bg-gradient-to-br from-green-50 to-green-100 p-3 rounded-xl text-center border border-green-200">
+                    <div className="text-xl font-bold text-green-700 mb-1">
+                      {availableSlots}
                     </div>
-                    <div className="text-xs text-green-600 font-medium">Available</div>
+                    <div className="text-xs text-green-600 font-medium leading-tight">Available</div>
                   </div>
-                  <div className="bg-gradient-to-br from-red-50 to-red-100 p-4 rounded-xl text-center border border-red-200">
-                    <div className="text-2xl font-bold text-red-700 mb-1">
-                      {provider.workload.bookedSlots}
+                  <div className="bg-gradient-to-br from-red-50 to-red-100 p-3 rounded-xl text-center border border-red-200">
+                    <div className="text-xl font-bold text-red-700 mb-1">
+                      {bookedSlots}
                     </div>
-                    <div className="text-xs text-red-600 font-medium">Booked</div>
+                    <div className="text-xs text-red-600 font-medium leading-tight">Booked</div>
                   </div>
-                </div>
-
-                {/* Today's Schedule Preview */}
-                <div>
+                  <div className="bg-gradient-to-br from-gray-50 to-gray-100 p-3 rounded-xl text-center border border-gray-200">
+                    <div className="text-xl font-bold text-gray-700 mb-1">
+                      {blockedSlots}
+                    </div>
+                    <div className="text-xs text-gray-600 font-medium leading-tight">Blocked</div>
+                  </div>
+                </div>                {/* Today's Schedule Preview - Flex-grow to fill remaining space */}
+                <div className="flex-1 flex flex-col">
                   <div className="flex items-center justify-between mb-3">
-                    <h4 className="font-semibold text-gray-900 text-sm">Today's Schedule</h4>
-                    <span className="text-xs text-gray-500">
-                      {provider.scheduleSlots.filter(slot => slot.startTime.startsWith(selectedDate) && slot.status === 'BOOKED').length} appointments
+                    <h4 className="font-semibold text-gray-900 text-sm truncate">Today's Schedule</h4>
+                    <span className="text-xs text-gray-500 whitespace-nowrap ml-2">
+                      {bookedSlots} appointments
                     </span>
                   </div>
-                  <div className="space-y-2 max-h-32 overflow-y-auto custom-scrollbar">
-                    {provider.scheduleSlots
-                      .filter(slot => slot.startTime.startsWith(selectedDate) && slot.status === 'BOOKED')
-                      .slice(0, 3)
-                      .map(slot => (
-                        <div key={slot.id} className="bg-gray-50 p-3 rounded-lg border border-gray-200 hover:bg-gray-100 transition-colors">
-                          <div className="flex justify-between items-center">
-                            <span className="font-medium text-sm text-gray-900">
-                              {formatTime(slot.startTime)}
-                            </span>
-                            {slot.triage && (
-                              <Badge variant={getUrgencyVariant(slot.triage.urgencyLevel)} size="sm">
-                                {slot.triage.urgencyLevel}
-                              </Badge>
-                            )}
+                  <div className="space-y-2 flex-1 overflow-y-auto custom-scrollbar">
+                    {(() => {
+                      const bookedSlotsData = todaySlots.filter(slot => slot.status === 'BOOKED');                      
+                      if (bookedSlotsData.length === 0) {
+                        return (
+                          <div className="text-center text-gray-500 py-6 bg-gray-50 rounded-lg">
+                            <div className="text-2xl mb-2">📅</div>
+                            <div className="text-xs font-medium">No appointments today</div>
                           </div>
-                          {slot.patient && (
-                            <div className="text-sm text-gray-600 mt-1">
-                              {slot.patient.firstName} {slot.patient.lastName}
+                        );
+                      }
+                      
+                      return (
+                        <>                          {bookedSlotsData.slice(0, 3).map(slot => (
+                            <div key={slot.id} className="bg-gray-50 p-3 rounded-lg border border-gray-200 hover:bg-gray-100 transition-colors">
+                              <div className="flex justify-between items-start gap-2 mb-1">
+                                <span className="font-medium text-sm text-gray-900 flex-shrink-0 no-break">
+                                  {formatTime(slot.startTime)}
+                                </span>
+                                {slot.triage && (
+                                  <Badge variant={getUrgencyVariant(slot.triage.urgencyLevel)} size="sm" className="flex-shrink-0">
+                                    {slot.triage.urgencyLevel}
+                                  </Badge>
+                                )}
+                              </div>
+                              {slot.patient && (
+                                <div className="text-xs text-gray-600 text-overflow-ellipsis no-break" title={`${slot.patient.firstName} ${slot.patient.lastName}`}>
+                                  {truncateText(`${slot.patient.firstName} ${slot.patient.lastName}`, 20)}
+                                </div>
+                              )}
+                            </div>
+                          ))}
+
+                          {bookedSlotsData.length > 3 && (
+                            <div className="text-xs text-gray-500 text-center pt-2 border-t border-gray-200">
+                              +{bookedSlotsData.length - 3} more appointments
                             </div>
                           )}
-                        </div>
-                      ))}
-                    {provider.scheduleSlots.filter(slot => slot.startTime.startsWith(selectedDate) && slot.status === 'BOOKED').length === 0 && (
-                      <div className="text-center text-gray-500 py-4 bg-gray-50 rounded-lg">
-                        <div className="text-lg mb-1">📅</div>
-                        <div className="text-xs">No appointments today</div>
-                      </div>
-                    )}
-                    {provider.scheduleSlots.filter(slot => slot.startTime.startsWith(selectedDate) && slot.status === 'BOOKED').length > 3 && (
-                      <div className="text-xs text-gray-500 text-center pt-2">
-                        +{provider.scheduleSlots.filter(slot => slot.startTime.startsWith(selectedDate) && slot.status === 'BOOKED').length - 3} more appointments
-                      </div>
-                    )}
+                        </>
+                      );
+                    })()}
                   </div>
                 </div>
               </div>
@@ -547,19 +667,31 @@ function SchedulerDashboard() {
       </div>
     );
   };
-
   const renderAssignmentsView = () => {
+    // Filter assignments based on selected provider
+    const filteredAssignments = selectedProvider
+      ? assignments.filter(a => {
+          const provider = providers.find(p => p.id === selectedProvider);
+          return provider && a.assignedTo?.email === provider.email;
+        })
+      : assignments;
+    
+    // Filter providers for statistics
+    const filteredProviders = Array.isArray(providers) ? providers.filter(p => !selectedProvider || p.id === selectedProvider) : [];
+    
     return (
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Recent Assignments */}
         <div className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden">
           <div className="bg-gradient-to-r from-purple-500 to-purple-600 px-6 py-4 text-white">
             <h3 className="text-lg font-semibold">Recent Triage Assignments</h3>
-            <p className="text-purple-100 text-sm">Latest patient assignments and scheduling</p>
+            <p className="text-purple-100 text-sm">
+              {selectedProvider ? 'Filtered by selected provider' : 'Latest patient assignments and scheduling'}
+            </p>
           </div>
           <div className="p-6">
             <div className="space-y-4 max-h-96 overflow-y-auto">
-              {assignments.map(assignment => (
+              {filteredAssignments.map(assignment => (
                 <div key={assignment.id} className="border border-gray-200 rounded-xl p-4 bg-gradient-to-r from-gray-50 to-white hover:shadow-md transition-all duration-200">
                   <div className="flex justify-between items-start">
                     <div className="flex-1">
@@ -592,12 +724,13 @@ function SchedulerDashboard() {
                     </div>
                   )}
                 </div>
-              ))}
-              {assignments.length === 0 && (
+              ))}              {filteredAssignments.length === 0 && (
                 <div className="text-center text-gray-500 py-12 bg-gray-50 rounded-xl">
                   <div className="text-4xl mb-3">📋</div>
                   <div className="text-lg font-medium mb-1">No assignments found</div>
-                  <div className="text-sm">No triage assignments found for this date</div>
+                  <div className="text-sm">
+                    {selectedProvider ? 'No triage assignments found for selected provider' : 'No triage assignments found for this date'}
+                  </div>
                 </div>
               )}
             </div>
@@ -617,11 +750,10 @@ function SchedulerDashboard() {
                 <h4 className="font-semibold text-gray-900 mb-4 flex items-center">
                   <span className="mr-2">🚨</span>
                   Urgency Distribution
-                </h4>
-                <div className="space-y-3">
+                </h4>                <div className="space-y-3">
                   {['HIGH', 'MEDIUM', 'LOW'].map(urgency => {
-                    const count = assignments.filter(a => a.urgencyLevel === urgency).length;
-                    const percentage = assignments.length ? (count / assignments.length) * 100 : 0;
+                    const count = filteredAssignments.filter(a => a.urgencyLevel === urgency).length;
+                    const percentage = filteredAssignments.length ? (count / filteredAssignments.length) * 100 : 0;
                     
                     return (
                       <div key={urgency} className="bg-gray-50 rounded-lg p-3 border border-gray-200">
@@ -654,12 +786,12 @@ function SchedulerDashboard() {
                   <span className="mr-2">👥</span>
                   Provider Load
                 </h4>                <div className="space-y-3">
-                  {Array.isArray(providers) ? providers.map(provider => {
-                    const assignedToProvider = assignments.filter(
+                  {filteredProviders.length > 0 ? filteredProviders.map(provider => {
+                    const assignedToProvider = filteredAssignments.filter(
                       a => a.assignedTo?.email === provider.email
                     ).length;
-                    const maxAssignments = Math.max(...providers.map(p => 
-                      assignments.filter(a => a.assignedTo?.email === p.email).length
+                    const maxAssignments = Math.max(...filteredProviders.map(p => 
+                      filteredAssignments.filter(a => a.assignedTo?.email === p.email).length
                     ), 1);
                     const percentage = (assignedToProvider / maxAssignments) * 100;
                     
@@ -691,13 +823,12 @@ function SchedulerDashboard() {
 
               {/* Summary Stats */}
               <div className="bg-gradient-to-r from-gray-50 to-gray-100 rounded-xl p-4 border border-gray-200">
-                <h4 className="font-semibold text-gray-900 mb-3">Summary</h4>
-                <div className="grid grid-cols-2 gap-4 text-center">
+                <h4 className="font-semibold text-gray-900 mb-3">Summary</h4>                <div className="grid grid-cols-2 gap-4 text-center">
                   <div>
-                    <div className="text-2xl font-bold text-blue-600">{assignments.length}</div>
+                    <div className="text-2xl font-bold text-blue-600">{filteredAssignments.length}</div>
                     <div className="text-xs text-gray-600">Total Assignments</div>
                   </div>                  <div>
-                    <div className="text-2xl font-bold text-green-600">{Array.isArray(providers) ? providers.length : 0}</div>
+                    <div className="text-2xl font-bold text-green-600">{filteredProviders.length}</div>
                     <div className="text-xs text-gray-600">Active Providers</div>
                   </div>
                 </div>

@@ -55,7 +55,6 @@ function NewTriagePage() {
   
   // Speech-to-text preferences
   const [speechEnabled, setSpeechEnabled] = useState(true);
-
   // Provider assignment
   const [selectedProviderId, setSelectedProviderId] = useState<string>('');
   const [selectedProvider, setSelectedProvider] = useState<ProviderType | null>(null);
@@ -135,6 +134,26 @@ function NewTriagePage() {
       console.error('Error generating triage suggestion:', error);
       setIsLoading(false);
       alert('Failed to generate triage suggestion. Please try again.');
+    }
+  };  // Handle scheduling a recommended provider
+  const scheduleRecommendedProvider = (provider: Provider) => {
+    setSelectedProviderId(provider.id);
+    setSelectedProvider({
+      id: provider.id,
+      firstName: provider.name.split(' ')[0], // Extract first name
+      lastName: provider.name.split(' ').slice(1).join(' '), // Extract last name
+      email: '', // Will be populated by ProviderSelect if needed
+      role: provider.role as any, // Type assertion since the interfaces may differ slightly
+      specialty: provider.specialty,
+      isAvailable: true,
+      clinicId: user?.clinicId
+    });
+    setAssignmentReason(`AI recommended provider: ${provider.reason} (Confidence: ${Math.round(provider.confidence)}%)`);
+    
+    // Scroll to assignment section
+    const assignmentSection = document.querySelector('[data-section="provider-assignment"]');
+    if (assignmentSection) {
+      assignmentSection.scrollIntoView({ behavior: 'smooth' });
     }
   };
 
@@ -359,25 +378,31 @@ function NewTriagePage() {
                               <div className="text-sm">
                                 <span className="font-medium">Match Confidence:</span> {Math.round(provider.confidence)}%
                               </div>
-                              <Button size="sm" variant="outline">Schedule</Button>
+                              <Button 
+                                size="sm" 
+                                variant="outline"
+                                onClick={() => scheduleRecommendedProvider(provider)}
+                              >
+                                Schedule
+                              </Button>
                             </div>
                           </div>
                         ))}
                       </div>
                     </div>
-                    
-                    {/* Provider Assignment Section */}
-                    <div className="border-t pt-4">
+                      {/* Provider Assignment Section */}
+                    <div className="border-t pt-4" data-section="provider-assignment">
                       <h3 className="font-medium mb-3">Assign to Provider (Optional)</h3>
                       <div className="space-y-3">                        <ProviderSelect
                           value={selectedProviderId}
                           onChange={(providerId, provider) => {
                             setSelectedProviderId(providerId);
-                            setSelectedProvider(provider);
+                            setSelectedProvider(provider || null);
                           }}
                           roles={[UserRole.DOCTOR, UserRole.NURSE, UserRole.PHARMACIST]}
                           label="Select Provider"
-                          placeholder="Choose a provider to assign this triage..."showStatus={true}
+                          placeholder="Choose a provider to assign this triage..."
+                          showStatus={true}
                           clinicId={user?.clinicId || undefined}
                         />
                         
