@@ -142,8 +142,7 @@ export class AuthService implements IAuthService {
    * @throws Error if credentials are invalid or account is locked
    */
   async login(credentials: LoginInput): Promise<AuthResult> {
-    try {
-      // Find the user
+    try {      // Find the user
       const user = await prisma.user.findUnique({
         where: { email: credentials.email },
         select: {
@@ -151,6 +150,7 @@ export class AuthService implements IAuthService {
           email: true,
           password: true,
           role: true,
+          clinicId: true,
           twoFactorEnabled: true,
           failedLoginAttempts: true,
           lastFailedLogin: true,
@@ -274,12 +274,12 @@ export class AuthService implements IAuthService {
           refreshToken: '', // Empty token since we're waiting for 2FA
           expiresAt: 0 // Required by interface
         };
-        
-        return {
+          return {
           user: {
             id: user.id,
             email: user.email,
             role: user.role as unknown as UserRole,
+            clinicId: user.clinicId,
             twoFactorEnabled: user.twoFactorEnabled
           },
           requiresTwoFactor: true,
@@ -295,12 +295,12 @@ export class AuthService implements IAuthService {
           lastFailedLogin: null,
           lockedUntil: null
         }
-      });
-        // Generate tokens
+      });      // Generate tokens
       const tokenPayload: TokenPayload = {
         id: user.id,
         email: user.email,
-        role: user.role as unknown as UserRole
+        role: user.role as unknown as UserRole,
+        clinicId: user.clinicId
       };
       
       // Defensive check to ensure TokenUtil is available
@@ -332,8 +332,7 @@ export class AuthService implements IAuthService {
         userAgent: credentials.userAgent,
         details: {
           deviceId: credentials.deviceId,
-          role: user.role as unknown as UserRole
-        }
+          role: user.role as unknown as UserRole        }
       });
       
       return {
@@ -341,6 +340,7 @@ export class AuthService implements IAuthService {
           id: user.id,
           email: user.email,
           role: user.role as unknown as UserRole,
+          clinicId: user.clinicId,
           twoFactorEnabled: user.twoFactorEnabled
         },
         tokens,

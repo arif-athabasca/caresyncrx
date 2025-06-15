@@ -2,121 +2,151 @@
  * Copyright (c) 2025 CareSyncRx
  * MIT License
  *
- * API endpoint for provider availability and scheduling
+ * API endpoint for managing provider availability schedules
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
+import { prisma } from '../../../../../lib/prisma';
 import { UserRole } from '@/auth';
 import { getSession } from '@/auth/services/utils/session-utils';
+import { randomUUID } from 'crypto';
 
 /**
- * GET handler for checking provider availability
+ * GET handler for fetching provider availability data
  */
 export async function GET(request: NextRequest) {
   try {
     const session = await getSession();
     
-    if (!session || !session.user) {
+    if (!session || !session.user || session.user.role !== UserRole.ADMIN) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    
+
     const searchParams = request.nextUrl.searchParams;
     const providerId = searchParams.get('providerId');
-    const date = searchParams.get('date');
-    const specialty = searchParams.get('specialty');
-    
-    // Base query for providers in the same clinic
-    const whereClause: any = {
+
+    // Build where conditions
+    const whereConditions: any = {
       role: { in: [UserRole.DOCTOR, UserRole.NURSE, UserRole.PHARMACIST] },
       clinicId: session.user.clinicId
     };
-    
-    // Filter by specific provider if requested
+
     if (providerId) {
-      whereClause.id = providerId;
+      whereConditions.id = providerId;
     }
-    
+
+    // Fetch providers with their availability and current workload
     const providers = await prisma.user.findMany({
-      where: whereClause,
-      include: {
-        specialties: specialty ? {
-          where: { specialty: { contains: specialty, mode: 'insensitive' } }
-        } : true,
-        availability: true,
-        assignedTriages: {
+      where: whereConditions,
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        email: true,
+        role: true,
+        clinicId: true,
+        ProviderSpecialty: {
+          where: { isCertified: true },
+          select: {
+            specialty: true,
+            expertise: true
+          }
+        },
+        ProviderAvailability: {
+          select: {
+            id: true,
+            dayOfWeek: true,
+            startTime: true,
+            endTime: true,
+            isAvailable: true,
+            maxPatients: true
+          },
+          orderBy: {
+            dayOfWeek: 'asc'
+          }
+        },
+        PatientTriage_PatientTriage_assignedToIdToUser: {
           where: {
             status: { in: ['ASSIGNED', 'IN_PROGRESS'] }
-          }
+          },
+          select: { id: true }
+        },
+        ScheduleSlot: {
+          where: {
+            startTime: { gte: new Date() },
+            status: 'AVAILABLE'
+          },
+          select: { id: true }
         }
-      }
+      },
+      orderBy: [
+        { lastName: 'asc' },
+        { firstName: 'asc' }
+      ]
     });
-    
-    // Calculate availability for each provider
-    const availabilityData = providers.map(provider => {
-      const currentWorkload = provider.assignedTriages.length;
+
+    // Transform data to include calculated availability status
+    const providersWithStatus = providers.map(provider => {
+      const currentWorkload = provider.PatientTriage_PatientTriage_assignedToIdToUser.length;
+      const availableSlots = provider.ScheduleSlot.length;
       
-      // Get today's availability
-      const today = new Date();
-      const dayOfWeek = today.getDay();
-      
-      const todayAvailability = provider.availability.find(
-        avail => avail.dayOfWeek === dayOfWeek && avail.isAvailable
-      );
-      
+      // Calculate availability status
       let availabilityStatus = 'unavailable';
-      let nextAvailable = null;
-      let maxCapacity = 0;
+      const today = new Date().getDay();
+      const todayAvailability = provider.ProviderAvailability.find(a => a.dayOfWeek === today);
       
-      if (todayAvailability) {
-        maxCapacity = todayAvailability.maxPatients;
-        
-        if (currentWorkload < maxCapacity) {
+      if (todayAvailability && todayAvailability.isAvailable) {
+        if (currentWorkload === 0) {
           availabilityStatus = 'available';
-          
-          // Calculate next available slot (simplified)
-          const now = new Date();
-          const [startHour, startMinute] = todayAvailability.startTime.split(':').map(Number);
-          const [endHour, endMinute] = todayAvailability.endTime.split(':').map(Number);
-          
-          const startTime = new Date(now);
-          startTime.setHours(startHour, startMinute, 0, 0);
-          
-          const endTime = new Date(now);
-          endTime.setHours(endHour, endMinute, 0, 0);
-          
-          if (now >= startTime && now <= endTime) {
-            // Available now
-            nextAvailable = now.toISOString();
-          } else if (now < startTime) {
-            // Available later today
-            nextAvailable = startTime.toISOString();
-          } else {
-            // Available tomorrow
-            const tomorrow = new Date(startTime);
-            tomorrow.setDate(tomorrow.getDate() + 1);
-            nextAvailable = tomorrow.toISOString();
-          }
-        } else {
+        } else if (currentWorkload < (todayAvailability.maxPatients || 8)) {
           availabilityStatus = 'busy';
+        } else {
+          availabilityStatus = 'unavailable';
         }
       }
+
+      // Calculate next available time
+      let nextAvailable = null;
+      const now = new Date();
       
+      // Find next available day
+      for (let i = 0; i < 7; i++) {
+        const checkDay = (now.getDay() + i) % 7;
+        const dayAvailability = provider.ProviderAvailability.find(a => a.dayOfWeek === checkDay);
+        
+        if (dayAvailability && dayAvailability.isAvailable) {
+          const nextDate = new Date(now);
+          nextDate.setDate(now.getDate() + i);
+          const [hours, minutes] = dayAvailability.startTime.split(':');
+          nextDate.setHours(parseInt(hours), parseInt(minutes), 0, 0);
+          
+          if (nextDate > now) {
+            nextAvailable = nextDate.toLocaleString();
+            break;
+          }
+        }
+      }
+
       return {
         id: provider.id,
-        name: provider.email.split('@')[0].replace('.', ' '),
+        firstName: provider.firstName,
+        lastName: provider.lastName,
+        email: provider.email,
         role: provider.role,
-        specialties: provider.specialties.map(s => s.specialty),
+        specialties: provider.ProviderSpecialty,
+        availability: provider.ProviderAvailability,
         currentWorkload,
-        maxCapacity,
+        availableSlots,
         availabilityStatus,
-        nextAvailable,
-        workloadPercentage: maxCapacity > 0 ? Math.round((currentWorkload / maxCapacity) * 100) : 100
+        nextAvailable
       };
     });
-    
-    return NextResponse.json({ data: availabilityData });
-    
+
+    return NextResponse.json({ 
+      data: providersWithStatus,
+      total: providersWithStatus.length 
+    });
+
   } catch (error) {
     console.error('Error fetching provider availability:', error);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
@@ -124,63 +154,194 @@ export async function GET(request: NextRequest) {
 }
 
 /**
- * POST handler for updating provider availability
+ * POST handler for updating provider availability schedules
  */
 export async function POST(request: NextRequest) {
   try {
     const session = await getSession();
     
-    // Only allow providers to update their own availability or admins to update any
-    if (!session || !session.user) {
+    if (!session || !session.user || session.user.role !== UserRole.ADMIN) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    
+
     const body = await request.json();
-    const { providerId, dayOfWeek, startTime, endTime, maxPatients, isAvailable } = body;
-    
-    // Check permissions
-    if (session.user.role !== UserRole.ADMIN && session.user.id !== providerId) {
-      return NextResponse.json({ error: 'Can only update own availability' }, { status: 403 });
+    const { providerId, availability } = body;
+
+    // Validate required fields
+    if (!providerId || !Array.isArray(availability)) {
+      return NextResponse.json({ 
+        error: 'Provider ID and availability array are required' 
+      }, { status: 400 });
     }
-    
-    // Validate time format (HH:MM)
-    const timeRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/;
-    if (!timeRegex.test(startTime) || !timeRegex.test(endTime)) {
-      return NextResponse.json({ error: 'Invalid time format. Use HH:MM' }, { status: 400 });
-    }
-    
-    // Update or create availability record
-    const availability = await prisma.providerAvailability.upsert({
-      where: {
-        providerId_dayOfWeek_startTime_endTime: {
-          providerId,
-          dayOfWeek,
-          startTime,
-          endTime
-        }
-      },
-      update: {
-        maxPatients,
-        isAvailable,
-        updatedAt: new Date()
-      },
-      create: {
-        providerId,
-        dayOfWeek,
-        startTime,
-        endTime,
-        maxPatients,
-        isAvailable
+
+    // Verify provider exists and belongs to the same clinic
+    const provider = await prisma.user.findUnique({
+      where: { id: providerId },
+      select: { 
+        id: true, 
+        clinicId: true, 
+        email: true, 
+        role: true 
       }
     });
-    
-    return NextResponse.json({ 
-      data: availability,
-      message: 'Availability updated successfully'
+
+    if (!provider) {
+      return NextResponse.json({ error: 'Provider not found' }, { status: 404 });
+    }
+
+    if (provider.clinicId !== session.user.clinicId) {
+      return NextResponse.json({ error: 'Provider not in your clinic' }, { status: 403 });
+    }
+
+    // Validate availability data
+    for (const slot of availability) {
+      if (typeof slot.dayOfWeek !== 'number' || slot.dayOfWeek < 0 || slot.dayOfWeek > 6) {
+        return NextResponse.json({ 
+          error: 'Invalid day of week. Must be 0-6 (Sunday-Saturday)' 
+        }, { status: 400 });
+      }
+
+      if (slot.isAvailable) {
+        if (!slot.startTime || !slot.endTime) {
+          return NextResponse.json({ 
+            error: 'Start time and end time are required for available days' 
+          }, { status: 400 });
+        }
+
+        if (!slot.maxPatients || slot.maxPatients < 1) {
+          return NextResponse.json({ 
+            error: 'Max patients must be at least 1 for available days' 
+          }, { status: 400 });
+        }
+      }
+    }
+
+    // Delete existing availability for this provider
+    await prisma.providerAvailability.deleteMany({
+      where: { providerId }
     });
-    
+
+    // Create new availability records
+    const newAvailability = await Promise.all(
+      availability.map(async (slot: any) => {
+        return prisma.providerAvailability.create({
+          data: {
+            id: randomUUID(),
+            providerId,
+            dayOfWeek: slot.dayOfWeek,
+            startTime: slot.isAvailable ? slot.startTime : '09:00',
+            endTime: slot.isAvailable ? slot.endTime : '17:00',
+            isAvailable: slot.isAvailable,
+            maxPatients: slot.isAvailable ? slot.maxPatients : 0,
+            updatedAt: new Date()
+          }
+        });
+      })
+    );
+
+    // Log the update
+    await prisma.securityAuditLog.create({
+      data: {
+        eventType: 'PROVIDER_AVAILABILITY_UPDATED',
+        severity: 'INFO',
+        userId: session.user.id,
+        username: session.user.email,
+        description: 'Provider availability schedule updated',
+        metadata: JSON.stringify({
+          providerId,
+          providerEmail: provider.email,
+          availabilitySlots: availability.length,
+          availableDays: availability.filter((slot: any) => slot.isAvailable).length
+        })
+      }
+    });
+
+    return NextResponse.json({ 
+      data: newAvailability,
+      message: 'Provider availability updated successfully' 
+    });
+
   } catch (error) {
     console.error('Error updating provider availability:', error);
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+  }
+}
+
+/**
+ * PATCH handler for updating individual availability slots
+ */
+export async function PATCH(request: NextRequest) {
+  try {
+    const session = await getSession();
+    
+    if (!session || !session.user || session.user.role !== UserRole.ADMIN) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const body = await request.json();
+    const { availabilityId, ...updates } = body;
+
+    if (!availabilityId) {
+      return NextResponse.json({ 
+        error: 'Availability ID is required' 
+      }, { status: 400 });
+    }
+
+    // Verify availability record exists and provider belongs to clinic
+    const existingAvailability = await prisma.providerAvailability.findUnique({
+      where: { id: availabilityId },
+      include: {
+        provider: {
+          select: {
+            id: true,
+            clinicId: true,
+            email: true
+          }
+        }
+      }
+    });
+
+    if (!existingAvailability) {
+      return NextResponse.json({ error: 'Availability record not found' }, { status: 404 });
+    }
+
+    if (existingAvailability.provider.clinicId !== session.user.clinicId) {
+      return NextResponse.json({ error: 'Availability record not found' }, { status: 404 });
+    }
+
+    // Update the availability record
+    const updatedAvailability = await prisma.providerAvailability.update({
+      where: { id: availabilityId },
+      data: {
+        ...updates,
+        updatedAt: new Date()
+      }
+    });
+
+    // Log the update
+    await prisma.securityAuditLog.create({
+      data: {
+        eventType: 'PROVIDER_AVAILABILITY_SLOT_UPDATED',
+        severity: 'INFO',
+        userId: session.user.id,
+        username: session.user.email,
+        description: 'Provider availability slot updated',
+        metadata: JSON.stringify({
+          availabilityId,
+          providerId: existingAvailability.providerId,
+          dayOfWeek: existingAvailability.dayOfWeek,
+          changes: updates
+        })
+      }
+    });
+
+    return NextResponse.json({ 
+      data: updatedAvailability,
+      message: 'Availability slot updated successfully' 
+    });
+
+  } catch (error) {
+    console.error('Error updating availability slot:', error);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }

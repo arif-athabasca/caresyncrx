@@ -17,7 +17,7 @@ export interface Session {
     id: string;
     email: string;
     role: string;
-    clinicId: string;
+    clinicId?: string;
   };
   exp?: number;
   iat?: number;

@@ -2,171 +2,149 @@
  * Copyright (c) 2025 CareSyncRx
  * MIT License
  *
- * API endpoint for schedule management and provider workload tracking
+ * API endpoint for schedule management - retrieve and create schedule slots
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '../../../../lib/prisma';
 import { UserRole } from '@/auth';
 import { getSession } from '@/auth/services/utils/session-utils';
+import { randomUUID } from 'crypto';
 
 /**
- * GET handler for fetching schedule data and provider workload
+ * GET handler for fetching schedule data with multiple view options
  */
 export async function GET(request: NextRequest) {
   try {
     const session = await getSession();
     
-    // Check if user is authenticated and has admin role
     if (!session || !session.user || session.user.role !== UserRole.ADMIN) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Get query parameters
     const searchParams = request.nextUrl.searchParams;
-    const date = searchParams.get('date') || new Date().toISOString().split('T')[0];
+    const date = searchParams.get('date');
+    const view = searchParams.get('view') || 'calendar';
     const providerId = searchParams.get('providerId');
+    const limit = parseInt(searchParams.get('limit') || '50');
+    const page = parseInt(searchParams.get('page') || '1');
 
-    // Parse the date to get start and end of day
-    const targetDate = new Date(date);
-    const startOfDay = new Date(targetDate.setHours(0, 0, 0, 0));
-    const endOfDay = new Date(targetDate.setHours(23, 59, 59, 999));
+    // Parse date range
+    let startDate: Date;
+    let endDate: Date;
 
-    // Build where clause for providers
-    const providerWhere: any = {
-      role: { in: [UserRole.DOCTOR, UserRole.NURSE, UserRole.PHARMACIST] },
-      clinicId: session.user.clinicId
+    if (date) {
+      startDate = new Date(date);
+      startDate.setHours(0, 0, 0, 0);
+      endDate = new Date(date);
+      endDate.setHours(23, 59, 59, 999);
+    } else {
+      // Default to today
+      startDate = new Date();
+      startDate.setHours(0, 0, 0, 0);
+      endDate = new Date();
+      endDate.setHours(23, 59, 59, 999);
+    }    // Build where conditions
+    const whereConditions: any = {
+      startTime: {
+        gte: startDate,
+        lte: endDate
+      },
+      User: {
+        clinicId: session.user.clinicId
+      }
     };
 
     if (providerId) {
-      providerWhere.id = providerId;
-    }
-
-    // Fetch providers with their schedule data
-    const providers = await prisma.user.findMany({
-      where: providerWhere,
+      whereConditions.providerId = providerId;
+    }    // Fetch schedule slots with related data
+    const scheduleSlots = await prisma.scheduleSlot.findMany({
+      where: whereConditions,
       include: {
-        specialties: {
+        User: {
           select: {
-            specialty: true,
-            expertise: true
+            id: true,
+            email: true,
+            role: true,
+            ProviderSpecialty: {
+              where: { isCertified: true },
+              select: { specialty: true }
+            }
           }
         },
-        scheduleSlots: {
-          where: {
-            startTime: {
-              gte: startOfDay,
-              lte: endOfDay
-            }
-          },
-          include: {
-            patient: {
-              select: {
-                id: true,
-                firstName: true,
-                lastName: true
-              }
-            },
-            triage: {
-              select: {
-                id: true,
-                urgencyLevel: true,
-                symptoms: true
-              }
-            }
-          },
-          orderBy: {
-            startTime: 'asc'
+        Patient: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true
           }
         },
-        assignedTriages: {
-          where: {
-            status: { in: ['ASSIGNED', 'IN_PROGRESS'] }
-          },
+        PatientTriage: {
           select: {
-            id: true
+            id: true,
+            urgencyLevel: true,
+            symptoms: true,
+            status: true
           }
         }
-      }
+      },
+      orderBy: {
+        startTime: 'asc'
+      },
+      take: limit,
+      skip: (page - 1) * limit
     });
 
-    // Calculate workload for each provider
-    const providersWithWorkload = await Promise.all(
-      providers.map(async (provider) => {
-        // Get or create workload record for the target date
-        let workload = await prisma.providerWorkload.findUnique({
-          where: {
-            providerId_date: {
-              providerId: provider.id,
-              date: targetDate
-            }
-          }
-        });
-
-        // Calculate real-time workload if not exists or outdated
-        const totalSlots = provider.scheduleSlots.length;
-        const bookedSlots = provider.scheduleSlots.filter(slot => slot.status === 'BOOKED').length;
-        const availableSlots = provider.scheduleSlots.filter(slot => slot.status === 'AVAILABLE').length;
-        const emergencySlots = provider.scheduleSlots.filter(slot => 
-          slot.appointmentType === 'EMERGENCY' && slot.status === 'AVAILABLE'
-        ).length;
-        const utilizationRate = totalSlots > 0 ? (bookedSlots / totalSlots) * 100 : 0;
-
-        // Update or create workload record
-        if (!workload || workload.updatedAt < new Date(Date.now() - 30 * 60 * 1000)) { // 30 minutes cache
-          workload = await prisma.providerWorkload.upsert({
-            where: {
-              providerId_date: {
-                providerId: provider.id,
-                date: targetDate
-              }
-            },
-            update: {
-              totalSlots,
-              bookedSlots,
-              availableSlots,
-              emergencySlots,
-              utilizationRate
-            },
-            create: {
-              providerId: provider.id,
-              date: targetDate,
-              totalSlots,
-              bookedSlots,
-              availableSlots,
-              emergencySlots,
-              utilizationRate
-            }
-          });
-        }
-
-        return {
-          id: provider.id,
-          email: provider.email,
-          role: provider.role,
-          specialties: provider.specialties,
-          scheduleSlots: provider.scheduleSlots,
-          workload: {
-            totalSlots: workload.totalSlots,
-            bookedSlots: workload.bookedSlots,
-            availableSlots: workload.availableSlots,
-            emergencySlots: workload.emergencySlots,
-            utilizationRate: workload.utilizationRate
-          },
-          currentTriageLoad: provider.assignedTriages.length
-        };
-      })
+    // Get total count
+    const totalSlots = await prisma.scheduleSlot.count({
+      where: whereConditions
+    });    // Fetch workload data for the date range
+    const clinicIdForWorkload = session.user.clinicId ? session.user.clinicId : undefined;
+    const providerIdForWorkload = providerId ? providerId : undefined;
+    const workloadData = await getWorkloadData(
+      clinicIdForWorkload, 
+      startDate, 
+      endDate, 
+      providerIdForWorkload
     );
 
-    return NextResponse.json({
-      data: providersWithWorkload,
-      meta: {
-        date: date,
-        totalProviders: providersWithWorkload.length,
-        averageUtilization: providersWithWorkload.length > 0 
-          ? providersWithWorkload.reduce((sum, p) => sum + Number(p.workload.utilizationRate), 0) / providersWithWorkload.length
-          : 0
-      }
+    // Build response based on view
+    const responseData = {      slots: scheduleSlots.map(slot => ({
+        id: slot.id,
+        startTime: slot.startTime.toISOString(),
+        endTime: slot.endTime.toISOString(),
+        status: slot.status,
+        appointmentType: slot.appointmentType,
+        description: slot.description,
+        location: slot.location,
+        provider: {
+          id: slot.User.id,
+          email: slot.User.email,
+          role: slot.User.role,
+          specialties: slot.User.ProviderSpecialty.map((s: any) => s.specialty)
+        },
+        patient: slot.Patient ? {
+          id: slot.Patient.id,
+          firstName: slot.Patient.firstName,
+          lastName: slot.Patient.lastName
+        } : null,
+        triage: slot.PatientTriage ? {
+          id: slot.PatientTriage.id,
+          urgencyLevel: slot.PatientTriage.urgencyLevel,
+          symptoms: slot.PatientTriage.symptoms,
+          status: slot.PatientTriage.status
+        } : null
+      })),
+      workload: workloadData,
+      total: totalSlots,
+      page,
+      limit,
+      view
+    };
+
+    return NextResponse.json({ 
+      data: responseData,
+      success: true
     });
 
   } catch (error) {
@@ -182,12 +160,10 @@ export async function POST(request: NextRequest) {
   try {
     const session = await getSession();
     
-    // Check if user is authenticated and has admin role
     if (!session || !session.user || session.user.role !== UserRole.ADMIN) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Parse request body
     const body = await request.json();
     const { 
       providerId, 
@@ -207,30 +183,49 @@ export async function POST(request: NextRequest) {
       }, { status: 400 });
     }
 
-    // Validate provider belongs to same clinic
+    // Verify provider exists and belongs to the same clinic
     const provider = await prisma.user.findUnique({
-      where: { id: providerId }
+      where: { id: providerId },
+      select: { 
+        id: true, 
+        clinicId: true, 
+        email: true, 
+        role: true 
+      }
     });
 
-    if (!provider || provider.clinicId !== session.user.clinicId) {
-      return NextResponse.json({ error: 'Provider not found or not in your clinic' }, { status: 404 });
+    if (!provider) {
+      return NextResponse.json({ error: 'Provider not found' }, { status: 404 });
     }
 
-    // Check for scheduling conflicts
+    if (provider.clinicId !== session.user.clinicId) {
+      return NextResponse.json({ error: 'Provider not in your clinic' }, { status: 403 });
+    }
+
+    // Check for conflicting schedule slots
+    const startDateTime = new Date(startTime);
+    const endDateTime = new Date(endTime);
+
+    if (startDateTime >= endDateTime) {
+      return NextResponse.json({ 
+        error: 'Start time must be before end time' 
+      }, { status: 400 });
+    }
+
     const conflictingSlots = await prisma.scheduleSlot.findMany({
       where: {
         providerId,
         OR: [
           {
             AND: [
-              { startTime: { lte: new Date(startTime) } },
-              { endTime: { gt: new Date(startTime) } }
+              { startTime: { lte: startDateTime } },
+              { endTime: { gt: startDateTime } }
             ]
           },
           {
             AND: [
-              { startTime: { lt: new Date(endTime) } },
-              { endTime: { gte: new Date(endTime) } }
+              { startTime: { lt: endDateTime } },
+              { endTime: { gte: endDateTime } }
             ]
           }
         ],
@@ -244,78 +239,140 @@ export async function POST(request: NextRequest) {
       }, { status: 409 });
     }
 
-    // Determine status based on whether patient/triage is assigned
-    const status = patientId || triageId ? 'BOOKED' : 'AVAILABLE';
+    // Determine initial status
+    let status = 'AVAILABLE';
+    if (patientId || triageId) {
+      status = 'BOOKED';
+    }
 
     // Create the schedule slot
-    const scheduleSlot = await prisma.scheduleSlot.create({
+    const newSlot = await prisma.scheduleSlot.create({
       data: {
+        id: randomUUID(),
         providerId,
-        patientId,
-        triageId,
-        startTime: new Date(startTime),
-        endTime: new Date(endTime),
-        appointmentType,
+        startTime: startDateTime,
+        endTime: endDateTime,
         status,
+        appointmentType,
         description,
-        location
-      },
-      include: {
-        provider: {
+        location,
+        patientId: patientId || null,
+        triageId: triageId || null,
+        updatedAt: new Date()
+      },      include: {
+        User: {
           select: {
+            id: true,
             email: true,
             role: true
           }
         },
-        patient: {
+        Patient: {
           select: {
+            id: true,
             firstName: true,
             lastName: true
           }
         },
-        triage: {
+        PatientTriage: {
           select: {
+            id: true,
             urgencyLevel: true,
-            symptoms: true
+            symptoms: true,
+            status: true
           }
         }
       }
     });
 
-    // Update provider workload
-    const date = new Date(startTime);
-    date.setHours(0, 0, 0, 0);
-
-    await updateProviderWorkload(providerId, date);
-
-    // Log the schedule creation
+    // Update provider workload for the date
+    const slotDate = new Date(startDateTime);
+    slotDate.setHours(0, 0, 0, 0);
+    await updateProviderWorkload(providerId, slotDate);    // Log the creation
     await prisma.securityAuditLog.create({
       data: {
+        id: randomUUID(),
         eventType: 'SCHEDULE_SLOT_CREATED',
         severity: 'INFO',
         userId: session.user.id,
         username: session.user.email,
         description: 'Schedule slot created',
         metadata: JSON.stringify({
-          scheduleSlotId: scheduleSlot.id,
+          scheduleSlotId: newSlot.id,
           providerId,
-          patientId,
-          triageId,
+          startTime: startDateTime.toISOString(),
+          endTime: endDateTime.toISOString(),
           appointmentType,
-          startTime,
-          endTime
+          status
         })
       }
     });
 
     return NextResponse.json({ 
-      data: scheduleSlot,
+      data: newSlot,
       message: 'Schedule slot created successfully' 
     });
 
   } catch (error) {
     console.error('Error creating schedule slot:', error);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+  }
+}
+
+/**
+ * Helper function to get workload data for providers
+ */
+async function getWorkloadData(clinicId: string | null | undefined, startDate: Date, endDate: Date, providerId?: string) {
+  try {
+    if (!clinicId) {
+      return [];
+    }
+    
+    const whereConditions: any = {
+      date: {
+        gte: startDate,
+        lte: endDate
+      },
+      User: {
+        clinicId
+      }
+    };
+
+    if (providerId) {
+      whereConditions.providerId = providerId;
+    }
+
+    const workloadRecords = await prisma.providerWorkload.findMany({
+      where: whereConditions,
+      include: {
+        User: {
+          select: {
+            id: true,
+            email: true,
+            role: true
+          }
+        }
+      },
+      orderBy: {
+        utilizationRate: 'desc'
+      }
+    });
+
+    return workloadRecords.map(record => ({
+      providerId: record.providerId,
+      providerEmail: record.User.email,
+      providerRole: record.User.role,
+      date: record.date.toISOString(),
+      totalSlots: record.totalSlots,
+      bookedSlots: record.bookedSlots,
+      availableSlots: record.availableSlots,
+      emergencySlots: record.emergencySlots,
+      utilizationRate: record.utilizationRate
+    }));
+
+  } catch (error) {
+    console.error('Error fetching workload data:', error);
+    return [];
   }
 }
 
@@ -327,7 +384,6 @@ async function updateProviderWorkload(providerId: string, date: Date) {
     const startOfDay = new Date(date.setHours(0, 0, 0, 0));
     const endOfDay = new Date(date.setHours(23, 59, 59, 999));
 
-    // Get all slots for the day
     const daySlots = await prisma.scheduleSlot.findMany({
       where: {
         providerId,
@@ -344,10 +400,7 @@ async function updateProviderWorkload(providerId: string, date: Date) {
     const emergencySlots = daySlots.filter(slot => 
       slot.appointmentType === 'EMERGENCY' && slot.status === 'AVAILABLE'
     ).length;
-    const utilizationRate = totalSlots > 0 ? (bookedSlots / totalSlots) * 100 : 0;
-
-    // Update workload record
-    await prisma.providerWorkload.upsert({
+    const utilizationRate = totalSlots > 0 ? (bookedSlots / totalSlots) * 100 : 0;    await prisma.providerWorkload.upsert({
       where: {
         providerId_date: {
           providerId,
@@ -359,16 +412,19 @@ async function updateProviderWorkload(providerId: string, date: Date) {
         bookedSlots,
         availableSlots,
         emergencySlots,
-        utilizationRate
+        utilizationRate,
+        updatedAt: new Date()
       },
       create: {
+        id: randomUUID(),
         providerId,
         date: startOfDay,
         totalSlots,
         bookedSlots,
         availableSlots,
         emergencySlots,
-        utilizationRate
+        utilizationRate,
+        updatedAt: new Date()
       }
     });
   } catch (error) {

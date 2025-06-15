@@ -123,22 +123,30 @@ export class UsersDataAccess extends BaseDataAccess {
   }
   /**
    * Get detailed provider information for triage suggestions
-   */
-  async getProvidersForTriage(filters: ProviderSearchFilters): Promise<ProviderInfo[]> {
+   */  async getProvidersForTriage(filters: ProviderSearchFilters): Promise<ProviderInfo[]> {
     const cacheKey = this.buildCacheKey('providers_triage', filters);
 
     return this.executeQuery(
-      cacheKey,      async () => {
-        // All provider roles that can handle triage assignments
+      cacheKey,
+      async () => {        // Include DOCTOR, NURSE, and PHARMACIST roles
         const validProviderRoles = [UserRole.DOCTOR, UserRole.NURSE, UserRole.PHARMACIST];
         const rolesToUse = filters.roles 
-          ? filters.roles.filter(role => validProviderRoles.includes(role))
-          : [UserRole.DOCTOR, UserRole.NURSE, UserRole.PHARMACIST];
-
+          ? filters.roles.filter(role => [UserRole.DOCTOR, UserRole.NURSE, UserRole.PHARMACIST].includes(role))
+          : [UserRole.DOCTOR, UserRole.NURSE, UserRole.PHARMACIST];        // Build where conditions
         const whereConditions: any = {
           clinicId: filters.clinicId,
-          role: { in: rolesToUse }
-        };        const providers = await prisma.user.findMany({
+          role: { in: validProviderRoles }
+        };
+
+        // If specific roles are requested, validate they're supported
+        if (filters.roles && filters.roles.length > 0) {
+          const requestedRoles = filters.roles.filter(role => 
+            [UserRole.DOCTOR, UserRole.NURSE, UserRole.PHARMACIST].includes(role)
+          );
+          if (requestedRoles.length > 0) {
+            whereConditions.role = { in: requestedRoles };
+          }
+        }const providers = await prisma.user.findMany({
           where: whereConditions,
           select: {
             id: true,
@@ -185,21 +193,31 @@ export class UsersDataAccess extends BaseDataAccess {
               select: { id: true }
             }
           }
-        });        return providers.map(provider => ({
-          id: provider.id,
-          firstName: provider.firstName,
-          lastName: provider.lastName,
-          email: provider.email,
-          role: provider.role as UserRole,
-          clinicId: provider.clinicId,
-          specialties: provider.ProviderSpecialty,
-          availability: provider.ProviderAvailability,
-          workload: {
-            assignedTriages: provider.PatientTriage_PatientTriage_assignedToIdToUser.length,
-            availableSlots: provider.ScheduleSlot.length,
-            utilizationRate: provider.PatientTriage_PatientTriage_assignedToIdToUser.length / (provider.ProviderAvailability.reduce((sum: number, a: any) => sum + a.maxPatients, 0) || 10) * 100
-          }
-        }));
+        });        return providers
+          .map(provider => {
+            return {
+              id: provider.id,
+              firstName: provider.firstName,
+              lastName: provider.lastName,
+              email: provider.email,
+              role: provider.role as UserRole,
+              clinicId: provider.clinicId,
+              specialties: provider.ProviderSpecialty,
+              availability: provider.ProviderAvailability,
+              workload: {
+                assignedTriages: provider.PatientTriage_PatientTriage_assignedToIdToUser.length,
+                availableSlots: provider.ScheduleSlot.length,
+                utilizationRate: provider.PatientTriage_PatientTriage_assignedToIdToUser.length / (provider.ProviderAvailability.reduce((sum: number, a: any) => sum + a.maxPatients, 0) || 10) * 100
+              }
+            };
+          })
+          .filter(provider => {
+            // Final filter to ensure we only return requested roles
+            if (!filters.roles || filters.roles.length === 0) {
+              return [UserRole.DOCTOR, UserRole.NURSE, UserRole.PHARMACIST].includes(provider.role);
+            }
+            return filters.roles.includes(provider.role);
+          });
       },
       { cache: { ...this.cacheConfig, ttlSeconds: 120 } } // Shorter TTL for triage data
     );

@@ -45,6 +45,7 @@ export interface TokenPayload {
   id: string;
   email: string;
   role: UserRole;
+  clinicId?: string;
   twoFactorEnabled?: boolean;
 }
 
@@ -57,6 +58,7 @@ export interface AuthUser {
   firstName?: string;
   lastName?: string;
   role: UserRole;
+  clinicId?: string;
   twoFactorEnabled?: boolean;
 }
 
