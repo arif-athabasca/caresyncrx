@@ -429,26 +429,25 @@ function SchedulerDashboard() {
             const specialty = provider.specialties.length > 0 
               ? truncateText(provider.specialties.map(s => s.specialty).join(', '), 20)
               : 'General Practice';
-            
-            return (
-              <div key={provider.id} className="workload-card bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden hover-lift transition-all duration-300">
-                {/* Provider Header with Bottle Green */}
-                <div className="bg-gradient-to-r from-emerald-700 to-emerald-800 px-4 py-3 text-white">
+              return (
+              <div key={provider.id} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden transition-all duration-300 hover:shadow-md">
+                {/* Provider Header - Neutral Style */}
+                <div className="bg-gray-50 px-4 py-3 border-b border-gray-200">
                   <div className="flex items-center justify-between gap-3">
                     <div className="flex-1 min-w-0">
-                      <h4 className="font-semibold text-white text-sm no-break text-overflow-ellipsis" title={provider.email.split('@')[0]}>
+                      <h4 className="font-semibold text-gray-900 text-sm no-break text-overflow-ellipsis" title={provider.email.split('@')[0]}>
                         {providerName}
                       </h4>
-                      <p className="text-emerald-100 text-xs no-break line-clamp-1" title={specialty}>
+                      <p className="text-gray-600 text-xs no-break line-clamp-1" title={specialty}>
                         {specialty}
                       </p>
-                      <p className="text-emerald-200 text-xs no-break">{provider.role}</p>
+                      <p className="text-gray-500 text-xs no-break">{provider.role}</p>
                     </div>
                     <div className="text-right flex-shrink-0">
-                      <div className="text-lg font-bold text-white no-break">
+                      <div className="text-lg font-bold text-gray-900 no-break">
                         {bookedSlots.length}
                       </div>
-                      <div className="text-emerald-100 text-xs whitespace-nowrap">Appointments</div>
+                      <div className="text-gray-600 text-xs whitespace-nowrap">Appointments</div>
                     </div>
                   </div>
                 </div>
@@ -482,7 +481,7 @@ function SchedulerDashboard() {
                     </div>
                     <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
                       <div
-                        className="h-2 rounded-full bg-emerald-600 transition-all duration-500"
+                        className="h-2 rounded-full bg-orange-500 transition-all duration-500"
                         style={{ width: `${Math.min(100, utilizationRate)}%` }}
                       />
                     </div>

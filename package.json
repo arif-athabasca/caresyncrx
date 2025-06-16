@@ -1,11 +1,11 @@
 {
   "name": "caresyncrx-dev",
   "version": "0.1.0",
-  "private": true,
-  "scripts": {
+  "private": true,  "scripts": {
     "dev": "next dev",
     "dev:turbo": "next dev --turbopack",
     "dev:clean": "node start-dev.js",
+    "dev:speech": "powershell -ExecutionPolicy Bypass -File .\\start-https.ps1",
     "build": "next build",
     "start": "next start",
     "prisma:generate": "prisma generate",

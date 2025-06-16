@@ -8,7 +8,7 @@
 
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Button } from './Button';
 import { useSpeechToText, type SpeechToTextOptions } from './hooks/useSpeechToText';
 
@@ -33,17 +33,18 @@ export const SpeechToTextInput: React.FC<SpeechToTextInputProps> = ({
   placeholder = "Type your text here or use voice input...",
   rows = 4,
   className = "",
-  disabled = false,
-  label,
+  disabled = false,  label,
   showWordCount = false,
   speechEnabled = true,
   onSpeechEnabledChange,
   language = 'en-US',
   maxLength,
-}) => {
-  const [localSpeechEnabled, setLocalSpeechEnabled] = useState(speechEnabled);
+}) => {  const [localSpeechEnabled, setLocalSpeechEnabled] = useState(speechEnabled);
   const [appendMode, setAppendMode] = useState(true);
   const [microphonePermission, setMicrophonePermission] = useState<'unknown' | 'granted' | 'denied'>('unknown');
+  const [interimText, setInterimText] = useState('');
+  const interimTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  
   // Update local state when prop changes
   useEffect(() => {
     setLocalSpeechEnabled(speechEnabled);
@@ -68,6 +69,76 @@ export const SpeechToTextInput: React.FC<SpeechToTextInputProps> = ({
     };
 
     checkMicrophonePermission();
+  }, []);  const onResultCallback = useCallback((newTranscript: string, isFinal: boolean) => {
+    if (newTranscript.trim()) {
+      const cleanTranscript = newTranscript.trim();
+      
+      if (isFinal) {
+        console.log('🎤 Final transcript received:', cleanTranscript);
+        
+        // Clear any pending interim timeout
+        if (interimTimeoutRef.current) {
+          clearTimeout(interimTimeoutRef.current);
+          interimTimeoutRef.current = null;
+        }
+        
+        // Process final result immediately
+        if (appendMode) {
+          const currentText = value.trim();
+          let newValue = currentText;
+          
+          if (currentText) {
+            newValue = currentText + ' ' + cleanTranscript;
+          } else {
+            newValue = cleanTranscript;
+          }
+          
+          onChange(maxLength ? newValue.slice(0, maxLength) : newValue);
+        } else {
+          onChange(cleanTranscript);
+        }
+        
+        // Clear interim text
+        setInterimText('');
+      } else {
+        // Store interim text
+        setInterimText(cleanTranscript);
+        
+        // Set a timeout to finalize interim text if no final result comes
+        if (interimTimeoutRef.current) {
+          clearTimeout(interimTimeoutRef.current);
+        }
+        
+        interimTimeoutRef.current = setTimeout(() => {
+          console.log('🎤 Finalizing interim transcript:', cleanTranscript);
+          
+          if (appendMode) {
+            const currentText = value.trim();
+            let newValue = currentText;
+            
+            if (currentText) {
+              newValue = currentText + ' ' + cleanTranscript;
+            } else {
+              newValue = cleanTranscript;
+            }
+            
+            onChange(maxLength ? newValue.slice(0, maxLength) : newValue);
+          } else {
+            onChange(cleanTranscript);
+          }
+          
+          setInterimText('');
+        }, 4000); // 4 second timeout for interim results
+      }
+    }
+  }, [appendMode, value, onChange, maxLength]);
+
+  const onErrorCallback = useCallback((errorMessage: string) => {
+    console.error('Speech recognition error:', errorMessage);
+    // Update microphone permission state if it's a permission error
+    if (errorMessage.includes('denied') || errorMessage.includes('not-allowed')) {
+      setMicrophonePermission('denied');
+    }
   }, []);
 
   const {
@@ -81,23 +152,8 @@ export const SpeechToTextInput: React.FC<SpeechToTextInputProps> = ({
     error,
   } = useSpeechToText({
     language,
-    onResult: (newTranscript, isFinal) => {
-      if (isFinal && newTranscript.trim()) {
-        if (appendMode) {
-          const separator = value && !value.endsWith(' ') && !value.endsWith('.') ? ' ' : '';
-          const newValue = value + separator + newTranscript.trim();
-          onChange(maxLength ? newValue.slice(0, maxLength) : newValue);
-        } else {
-          onChange(newTranscript.trim());
-        }
-      }
-    },    onError: (errorMessage) => {
-      console.error('Speech recognition error:', errorMessage);
-      // Update microphone permission state if it's a permission error
-      if (errorMessage.includes('denied') || errorMessage.includes('not-allowed')) {
-        setMicrophonePermission('denied');
-      }
-    },
+    onResult: onResultCallback,
+    onError: onErrorCallback,
   });
 
   const handleRequestPermission = async () => {
@@ -210,9 +266,7 @@ export const SpeechToTextInput: React.FC<SpeechToTextInputProps> = ({
               >
                 🎤 Allow Microphone
               </Button>
-            )}
-            
-            <Button
+            )}            <Button
               type="button"
               size="sm"
               variant={isListening ? "critical" : "secondary"}
@@ -252,12 +306,10 @@ export const SpeechToTextInput: React.FC<SpeechToTextInputProps> = ({
             )}
           </div>
         </div>
-      )}
-
-      {/* Text Input */}
+      )}      {/* Text Input */}
       <div className="relative">
         <textarea
-          value={value + (isListening ? interimTranscript : '')}
+          value={value}
           onChange={(e) => onChange(e.target.value)}
           placeholder={placeholder}
           rows={rows}
@@ -272,6 +324,15 @@ export const SpeechToTextInput: React.FC<SpeechToTextInputProps> = ({
             ${className}
           `}
         />
+        
+        {/* Interim Results Overlay */}
+        {isListening && interimTranscript && (
+          <div className="absolute bottom-2 left-2 right-2 pointer-events-none">
+            <div className="bg-blue-100 border border-blue-300 rounded px-2 py-1 text-sm text-blue-800">
+              <span className="font-medium">Listening:</span> "{interimTranscript}"
+            </div>
+          </div>
+        )}
         
         {/* Listening Indicator Overlay */}
         {isListening && (

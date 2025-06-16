@@ -52,8 +52,7 @@ function NewTriagePage() {
   const [symptoms, setSymptoms] = useState('');
   const [triageSuggestion, setTriageSuggestion] = useState<AISuggestion | null>(null);
   const [urgencyLevel, setUrgencyLevel] = useState('MEDIUM');
-  
-  // Speech-to-text preferences
+    // Speech-to-text preferences
   const [speechEnabled, setSpeechEnabled] = useState(true);
   // Provider assignment
   const [selectedProviderId, setSelectedProviderId] = useState<string>('');
