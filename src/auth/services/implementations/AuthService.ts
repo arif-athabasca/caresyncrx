@@ -108,25 +108,25 @@ export class AuthService implements IAuthService {
         email: user.email,
         resourceType: 'AUTH'
       }
-    });
-      // Generate tokens for the newly registered user
+    });      // Generate tokens for the newly registered user
     const tokenPayload: TokenPayload = {
       id: user.id,
       email: user.email,
-      role: user.role as unknown as UserRole
+      role: user.role as unknown as UserRole,
+      clinicId: user.clinicId
     };
     
     const tokens = TokenUtil.generateTokens(tokenPayload) as TokenPair;
     
     // Store refresh token
     await this.storeRefreshToken(user.id, tokens.refreshToken);
-    
-    // Return session data
+      // Return session data
     return {
       user: {
         id: user.id,
         email: user.email,
         role: user.role as unknown as UserRole,
+        clinicId: user.clinicId,
         twoFactorEnabled: user.twoFactorEnabled
       },
       tokens,

@@ -73,14 +73,13 @@ class TokenUtilImpl {
     if (deviceId) {
       tokenPayload.deviceId = deviceId;
     }
-    
-    // Ensure the payload has a user property
+      // Ensure the payload has a user property
     if (!tokenPayload.user) {
       tokenPayload.user = {
         id: payload.id,
         email: payload.email,
         role: payload.role,
-        clinicId: payload.clinicId || ''
+        clinicId: payload.clinicId
       };
     }
     

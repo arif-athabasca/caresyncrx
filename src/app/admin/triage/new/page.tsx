@@ -48,8 +48,9 @@ function NewTriagePage() {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
   const [patientSearchQuery, setPatientSearchQuery] = useState('');  
-  const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
-  const [symptoms, setSymptoms] = useState('');
+  const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);  const [symptoms, setSymptoms] = useState('');
+  const [inputUrgency, setInputUrgency] = useState('moderate'); // New urgency input state
+  const [originalUrgency, setOriginalUrgency] = useState('moderate'); // Track original assessment
   const [triageSuggestion, setTriageSuggestion] = useState<AISuggestion | null>(null);
   const [urgencyLevel, setUrgencyLevel] = useState('MEDIUM');
     // Speech-to-text preferences
@@ -84,9 +85,7 @@ function NewTriagePage() {
         p.name.toLowerCase().includes(patientSearchQuery.toLowerCase()) || 
         p.id.toLowerCase().includes(patientSearchQuery.toLowerCase())
       )
-    : [];
-
-  // Generate AI triage suggestion
+    : [];  // Generate AI triage suggestion
   const generateTriageSuggestion = async () => {
     if (!selectedPatient) {
       alert('Please select a patient');
@@ -107,26 +106,45 @@ function NewTriagePage() {
           'Content-Type': 'application/json',
           'Cache-Control': 'no-cache',
         },
-        credentials: 'include',
-        body: JSON.stringify({
+        credentials: 'include',        body: JSON.stringify({
           patientId: selectedPatient.id,
-          symptoms: symptoms
+          symptoms: symptoms,
+          urgency: inputUrgency
         })
       });
-      
-      if (!response.ok) {
-        throw new Error(`AI suggestion failed: ${response.status}`);
+        if (!response.ok) {
+        console.error('Response status:', response.status);
+        console.error('Response statusText:', response.statusText);
+        const errorText = await response.text();
+        console.error('Response body:', errorText);
+        throw new Error(`AI suggestion failed: ${response.status} - ${errorText}`);
       }
       
       const result = await response.json();
-      
-      setTriageSuggestion({
+        setTriageSuggestion({
         providers: result.data.providers || [],
         suggestedUrgency: result.data.suggestedUrgency || 'MEDIUM',
         analysis: result.data.analysis || 'AI analysis completed successfully.'
       });
-      
+        // Update urgency level to AI suggestion
       setUrgencyLevel(result.data.suggestedUrgency || 'MEDIUM');
+      
+      // Auto-update initial urgency assessment to match AI suggestion for consistency
+      if (result.data.suggestedUrgency) {
+        const urgencyMapping: { [key: string]: string } = {
+          'HIGH': 'high',
+          'MEDIUM': 'moderate', 
+          'LOW': 'low',
+          'CRITICAL': 'critical'
+        };
+        const newUrgency = urgencyMapping[result.data.suggestedUrgency] || 'moderate';
+        
+        // Only update if different from original (to show "Updated by AI" message)
+        if (newUrgency !== inputUrgency) {
+          setOriginalUrgency(inputUrgency); // Store the original before updating
+          setInputUrgency(newUrgency);
+        }
+      }
       setIsLoading(false);
       
     } catch (error) {
@@ -134,7 +152,7 @@ function NewTriagePage() {
       setIsLoading(false);
       alert('Failed to generate triage suggestion. Please try again.');
     }
-  };  // Handle scheduling a recommended provider
+  };// Handle scheduling a recommended provider
   const scheduleRecommendedProvider = (provider: Provider) => {
     setSelectedProviderId(provider.id);
     setSelectedProvider({
@@ -302,8 +320,7 @@ function NewTriagePage() {
             </Card.Header>
             <Card.Body>
               <div className="space-y-4">
-                {/* Speech-to-Text Input Component */}
-                <SpeechToTextInput
+                {/* Speech-to-Text Input Component */}                <SpeechToTextInput
                   value={symptoms}
                   onChange={setSymptoms}
                   label="Patient Symptoms"
@@ -314,6 +331,32 @@ function NewTriagePage() {
                   onSpeechEnabledChange={setSpeechEnabled}
                   maxLength={2000}
                 />
+                  {/* Initial Urgency Assessment */}
+                <div>                  
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Initial Urgency Assessment
+                    {triageSuggestion && originalUrgency !== inputUrgency && (
+                      <span className="ml-2 text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full font-normal">
+                        ⚡ Updated by AI: {originalUrgency} → {inputUrgency}
+                      </span>
+                    )}
+                  </label>
+                  <Select
+                    value={inputUrgency}
+                    onChange={(e) => setInputUrgency(e.target.value)}
+                    className="w-full"
+                  >
+                    <option value="low">Low</option>
+                    <option value="moderate">Moderate</option>
+                    <option value="high">High</option>
+                    <option value="critical">Critical</option>
+                  </Select>                  <p className="text-xs text-gray-500 mt-1">
+                    {triageSuggestion 
+                      ? "AI has analyzed symptoms and updated this assessment"
+                      : "Select your initial assessment - AI will provide its own recommendation"
+                    }
+                  </p>
+                </div>
                 
                 <div className="flex justify-end">
                   <Button
@@ -343,18 +386,27 @@ function NewTriagePage() {
                         </Badge>
                         <span className="text-sm text-gray-500">(AI Suggestion)</span>
                       </div>
-                    </div>
-                    
-                    <div>
-                      <label className="block mb-1">Set Urgency Level:</label>
+                    </div>                    <div>
+                      <label className="block mb-1 font-medium">
+                        Set Final Urgency Level:
+                        {urgencyLevel !== triageSuggestion.suggestedUrgency && (
+                          <span className="ml-2 text-xs bg-amber-100 text-amber-800 px-2 py-1 rounded-full font-normal">
+                            ⚠️ Override: AI suggested {triageSuggestion.suggestedUrgency}
+                          </span>
+                        )}
+                      </label>
                       <Select
                         value={urgencyLevel}
                         onChange={(e) => setUrgencyLevel(e.target.value)}
+                        className="w-full"
                       >
                         <option value="HIGH">HIGH - Immediate attention needed</option>
                         <option value="MEDIUM">MEDIUM - Prompt attention needed</option>
                         <option value="LOW">LOW - Routine care appropriate</option>
                       </Select>
+                      <p className="text-xs text-gray-500 mt-1">
+                        This is the final urgency level that will be used for provider recommendations
+                      </p>
                     </div>
                     
                     <div>
@@ -388,10 +440,17 @@ function NewTriagePage() {
                           </div>
                         ))}
                       </div>
-                    </div>
-                      {/* Provider Assignment Section */}
+                    </div>                      {/* Provider Assignment Section */}
                     <div className="border-t pt-4" data-section="provider-assignment">
-                      <h3 className="font-medium mb-3">Assign to Provider (Optional)</h3>
+                      <h3 className="font-medium mb-3">
+                        Assign to Provider (Optional)
+                        {selectedProvider && triageSuggestion.providers.length > 0 && 
+                         selectedProvider.id !== triageSuggestion.providers[0].id && (
+                          <span className="ml-2 text-xs bg-orange-100 text-orange-800 px-2 py-1 rounded-full font-normal">
+                            💡 Different from AI's #1 choice: {triageSuggestion.providers[0].name}
+                          </span>
+                        )}
+                      </h3>
                       <div className="space-y-3">                        <ProviderSelect
                           value={selectedProviderId}
                           onChange={(providerId, provider) => {
