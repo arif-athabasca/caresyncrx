@@ -170,7 +170,125 @@ export async function middleware(request: NextRequest) {
     
     // Log successful verification
     console.log('Token verified successfully for user:', (payload as { email: string }).email);
-    
+
+    // Role-based route protection
+    const userRole = (payload as { role: string }).role;
+    const userId = (payload as { id: string }).id;    // Check role-based access control
+    if (pathname.startsWith('/doctor') && userRole !== 'DOCTOR') {
+      await logSecurityEvent({
+        type: SecurityEventType.ACCESS_DENIED,
+        severity: SecurityEventSeverity.CRITICAL,
+        userId: userId,
+        username: (payload as { email: string }).email,
+        ipAddress: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || '',
+        userAgent: request.headers.get('user-agent') || undefined,
+        path: pathname,
+        method: request.method,
+        description: `Unauthorized access attempt: User with role ${userRole} tried to access doctor dashboard`,
+        metadata: { 
+          userRole: userRole,
+          attemptedPath: pathname,
+          expectedRole: 'DOCTOR'
+        }
+      });
+
+      // For API routes, return 403
+      if (pathname.startsWith('/api/doctor')) {
+        return NextResponse.json(
+          { error: 'Access denied. Doctor role required.' },
+          { status: 403 }
+        );
+      }
+
+      // For dashboard routes, redirect to unauthorized page or their correct dashboard
+      if (userRole === 'ADMIN') {
+        return NextResponse.redirect(new URL('/admin', request.url));
+      } else if (userRole === 'PATIENT') {
+        return NextResponse.redirect(new URL('/dashboard', request.url));
+      } else {
+        return NextResponse.redirect(new URL('/unauthorized', request.url));
+      }
+    }    if (pathname.startsWith('/admin') && userRole !== 'ADMIN' && userRole !== 'SUPER_ADMIN') {
+      await logSecurityEvent({
+        type: SecurityEventType.ACCESS_DENIED,
+        severity: SecurityEventSeverity.CRITICAL,
+        userId: userId,
+        username: (payload as { email: string }).email,
+        ipAddress: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || '',
+        userAgent: request.headers.get('user-agent') || undefined,
+        path: pathname,
+        method: request.method,
+        description: `Unauthorized access attempt: User with role ${userRole} tried to access admin dashboard`,
+        metadata: { 
+          userRole: userRole,
+          attemptedPath: pathname,
+          expectedRole: 'ADMIN'
+        }
+      });
+
+      // For API routes, return 403
+      if (pathname.startsWith('/api/admin')) {
+        return NextResponse.json(
+          { error: 'Access denied. Admin role required.' },
+          { status: 403 }
+        );
+      }
+
+      // For dashboard routes, redirect to their correct dashboard
+      if (userRole === 'DOCTOR') {
+        return NextResponse.redirect(new URL('/doctor', request.url));
+      } else if (userRole === 'PATIENT') {
+        return NextResponse.redirect(new URL('/dashboard', request.url));
+      } else {
+        return NextResponse.redirect(new URL('/unauthorized', request.url));
+      }
+    }    // Similar protection for API routes to ensure doctors can only access their own API endpoints
+    if (pathname.startsWith('/api/doctor') && userRole !== 'DOCTOR') {
+      await logSecurityEvent({
+        type: SecurityEventType.ACCESS_DENIED,
+        severity: SecurityEventSeverity.CRITICAL,
+        userId: userId,
+        username: (payload as { email: string }).email,
+        ipAddress: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || '',
+        userAgent: request.headers.get('user-agent') || undefined,
+        path: pathname,
+        method: request.method,
+        description: `Unauthorized API access attempt: User with role ${userRole} tried to access doctor API`,
+        metadata: { 
+          userRole: userRole,
+          attemptedPath: pathname,
+          expectedRole: 'DOCTOR'
+        }
+      });
+
+      return NextResponse.json(
+        { error: 'Access denied. Doctor role required.' },
+        { status: 403 }
+      );
+    }    if (pathname.startsWith('/api/admin') && userRole !== 'ADMIN' && userRole !== 'SUPER_ADMIN') {
+      await logSecurityEvent({
+        type: SecurityEventType.ACCESS_DENIED,
+        severity: SecurityEventSeverity.CRITICAL,
+        userId: userId,
+        username: (payload as { email: string }).email,
+        ipAddress: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || '',
+        userAgent: request.headers.get('user-agent') || undefined,
+        path: pathname,
+        method: request.method,
+        description: `Unauthorized API access attempt: User with role ${userRole} tried to access admin API`,
+        metadata: { 
+          userRole: userRole,
+          attemptedPath: pathname,
+          expectedRole: 'ADMIN'
+        }
+      });
+
+      return NextResponse.json(
+        { error: 'Access denied. Admin role required.' },
+        { status: 403 }
+      );
+    }
+
     // Log token verification success to SecurityAuditLog
     await logSecurityEvent({      type: SecurityEventType.LOGIN_SUCCESS,
       severity: SecurityEventSeverity.INFO,

@@ -43,28 +43,44 @@ model BillingRecord {
   updatedAt   DateTime
   Patient     Patient       @relation(fields: [patientId], references: [id])
   User        User          @relation(fields: [providerId], references: [id])
+  
+  // Enhanced Billing relationships
+  invoiceNumber String?      @unique
+  payments      Payment[]
 
   @@index([patientId])
   @@index([providerId])
   @@index([serviceCode])
   @@index([status])
   @@index([submittedAt])
+  @@index([invoiceNumber])
 }
 
 model CareAction {
-  id            String        @id
-  triageId      String
-  actionType    String
-  description   String
-  status        ActionStatus  @default(PENDING)
-  dueDate       DateTime?
-  completedAt   DateTime?
-  completedById String?
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime
-  User          User?         @relation(fields: [completedById], references: [id])
-  PatientTriage PatientTriage @relation(fields: [triageId], references: [id], onDelete: Cascade)
+  id               String        @id
+  patientId        String        // Direct patient relationship
+  providerId       String        // Direct provider relationship  
+  triageId         String?       // Optional triage relationship
+  actionType       String
+  description      String?
+  notes            String?       // Additional notes field
+  status           ActionStatus  @default(PENDING)
+  followUpRequired Boolean       @default(false)
+  scheduledDate    DateTime?
+  dueDate          DateTime?
+  completedAt      DateTime?
+  completedById    String?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime
+  
+  // Relationships
+  Patient           Patient       @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  Provider          User          @relation("ProviderCareActions", fields: [providerId], references: [id])
+  CompletedByUser   User?         @relation("CompletedCareActions", fields: [completedById], references: [id])
+  PatientTriage     PatientTriage? @relation(fields: [triageId], references: [id], onDelete: SetNull)
 
+  @@index([patientId])
+  @@index([providerId])
   @@index([completedById])
   @@index([status])
   @@index([triageId])
@@ -86,6 +102,12 @@ model InsuranceProvider {
   createdAt        DateTime           @default(now())
   updatedAt        DateTime
   PatientInsurance PatientInsurance[]
+  
+  // AI-related relationships
+  priorAuthorizations PriorAuthorization[] @relation("InsurancePriorAuth")
+  
+  // Enhanced Billing relationships
+  insuranceClaims     InsuranceClaim[]
 }
 
 model LoginAttempt {
@@ -119,19 +141,66 @@ model Patient {
   firstName        String
   lastName         String
   dateOfBirth      DateTime           @db.Date
+  email            String?            // Optional email
+  phone            String?            // Optional phone
+  gender           String?            // Optional gender
+  address          String?            // Optional address
+  emergencyContact String?            // Optional emergency contact
+  
+  // Health Card Integration for Government Services
+  healthCardNumber String?            @unique // Government health card number
+  healthCardProvince String?          // Province/state for health card
+  healthCardExpiry DateTime?          @db.Date // Health card expiry date
+  governmentVerified Boolean          @default(false) // Verified through government API
+  lastGovSync      DateTime?          // Last government data sync
+  
+  medicalHistory   String[]           @default([]) // Medical history array
+  allergies        String[]           @default([]) // Allergies array
+  currentMedications String[]         @default([]) // Current medications array
+  age              Int?               // Calculated age field
   language         String
   clinicId         String
+  
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+  
+  // Relationships
   AuditLog         AuditLog[]
   BillingRecord    BillingRecord[]
+  CareAction       CareAction[]       // Care actions for this patient
+  ClinicalNote     ClinicalNote[]     // Clinical notes for this patient
   Clinic           Clinic             @relation(fields: [clinicId], references: [id], onDelete: Cascade)
   PatientInsurance PatientInsurance[]
   PatientTriage    PatientTriage[]
   Prescription     Prescription[]
   ScheduleSlot     ScheduleSlot[]
   Task             Task[]
-
+  
+  // AI-related relationships - Optimized
+  insights                DoctorInsights[]           @relation("PatientInsights")
+  aiAnalysis              PatientAIAnalysis[]        @relation("PatientAIAnalysis") 
+  diagnosticResults       DiagnosticAIResult[]       @relation("PatientDiagnostics")
+  medicationAnalysis      MedicationAIAnalysis[]     @relation("PatientMedAnalysis")
+  clinicalCoding          ClinicalAICoding[]         @relation("PatientCoding")
+  priorAuthorizations     PriorAuthorization[]       @relation("PatientPriorAuth")
+  scheduleRecommendations ScheduleAIRecommendation[] @relation("PatientScheduleAI")
+  
+  // PIPEDA Compliance relationships
+  consent                PatientConsent?
+  consentAuditLogs       ConsentAuditLog[]
+  dataDisposalRecords    DataDisposalRecord[]
+  aiProcessingLogs       AIDataProcessingLog[]
+  rightsRequests         PatientRightsRequest[]
+  
+  // Enhanced Billing relationships
+  paymentMethods         PaymentMethod[]
+  payments               Payment[]
+  insuranceClaims        InsuranceClaim[]
+  paymentPlans           PaymentPlan[]
   @@index([clinicId])
   @@index([firstName, lastName])
+  @@index([healthCardNumber])
+  @@index([governmentVerified])
 }
 
 model PatientInsurance {
@@ -163,13 +232,18 @@ model PatientTriage {
   assignedBy                            String?
   assignmentReason                      String?
   aiSuggestion                          Json?
+  doctorNotes                           String?        // AI-enhanced doctor notes
+  lastDoctorVisit                       DateTime?      // Track doctor interactions  aiDiagnosisData                       Json?          // AI diagnosis cache
+  aiConfidence                          Float?         // AI recommendation confidence
   createdAt                             DateTime       @default(now())
   updatedAt                             DateTime
   CareAction                            CareAction[]
+  AIAnalysis                            PatientAIAnalysis[] @relation("TriageAIAnalysis")
   User_PatientTriage_assignedByToUser   User?          @relation("PatientTriage_assignedByToUser", fields: [assignedBy], references: [id])
   User_PatientTriage_assignedToIdToUser User?          @relation("PatientTriage_assignedToIdToUser", fields: [assignedToId], references: [id])
   Patient                               Patient?       @relation(fields: [patientId], references: [id])
   ScheduleSlot                          ScheduleSlot[]
+  ClinicalNote                          ClinicalNote[] // Clinical notes related to this triage
 
   @@index([assignedToId])
   @@index([patientId])
@@ -189,6 +263,10 @@ model Prescription {
   Patient    Patient   @relation(fields: [patientId], references: [id], onDelete: Cascade)
   User       User      @relation(fields: [userId], references: [id])
   Task       Task[]
+  
+  // AI-related relationships - Optimized
+  aiAnalysis         MedicationAIAnalysis[] @relation("PrescriptionAIAnalysis")
+  priorAuthorizations PriorAuthorization[]  @relation("PrescriptionPriorAuth")
 
   @@index([patientId])
   @@index([status])
@@ -220,6 +298,9 @@ model ProviderNote {
   createdAt  DateTime @default(now()) @db.Timestamptz(6)
   User       User     @relation(fields: [providerId], references: [id], onDelete: Cascade)
   Task       Task[]
+  
+  // AI-related relationships
+  ClinicalAICoding ClinicalAICoding[] @relation("NoteCoding")
 
   @@index([providerId])
 }
@@ -292,10 +373,12 @@ model ScheduleSlot {
   location        String?
   notes           String?
   createdAt       DateTime       @default(now())
-  updatedAt       DateTime
+  updatedAt       DateTime       @updatedAt
+  
   Patient         Patient?       @relation(fields: [patientId], references: [id])
   User            User           @relation(fields: [providerId], references: [id], onDelete: Cascade)
   PatientTriage   PatientTriage? @relation(fields: [triageId], references: [id])
+  ClinicalNote    ClinicalNote[] // Clinical notes related to this appointment
 
   @@index([endTime])
   @@index([patientId])
@@ -377,11 +460,16 @@ model User {
   twoFactorSecret                                String?
   lastVerifyAttempt                              DateTime?
   verifyAttempts                                 Int                    @default(0)
+  
   createdAt                                      DateTime               @default(now())
-  updatedAt                                      DateTime
+  updatedAt                                      DateTime               @updatedAt
+  
+  // Relationships
   AuditLog                                       AuditLog[]
   BillingRecord                                  BillingRecord[]
-  CareAction                                     CareAction[]
+  ProviderCareActions                            CareAction[]           @relation("ProviderCareActions")
+  CompletedCareActions                           CareAction[]           @relation("CompletedCareActions")
+  ProviderNotes                                  ClinicalNote[]         @relation("ProviderNotes")
   PasswordResetToken                             PasswordResetToken[]
   PatientTriage_PatientTriage_assignedByToUser   PatientTriage[]        @relation("PatientTriage_assignedByToUser")
   PatientTriage_PatientTriage_assignedToIdToUser PatientTriage[]        @relation("PatientTriage_assignedToIdToUser")
@@ -396,6 +484,33 @@ model User {
   TwoFactorSetup                                 TwoFactorSetup?
   Clinic                                         Clinic                 @relation(fields: [clinicId], references: [id])
   UserDevice                                     UserDevice[]
+  
+  // AI-related relationships - Optimized for performance
+  aiProfile                                      DoctorAIProfile?       @relation("DoctorAIProfile")
+  insights                                       DoctorInsights[]       @relation("DoctorInsights") 
+  patientAnalysis                                PatientAIAnalysis[]    @relation("DoctorAIAnalysis")
+  diagnosticResults                              DiagnosticAIResult[]   @relation("DoctorDiagnostics")
+  priorAuthorizations                            PriorAuthorization[]   @relation("DoctorPriorAuth")
+  medicationAnalysis                             MedicationAIAnalysis[] @relation("DoctorMedAnalysis")
+  clinicalCoding                                 ClinicalAICoding[]     @relation("DoctorCoding")
+  codingReviews                                  ClinicalAICoding[]     @relation("CodingReviewer")
+  scheduleRecommendations                        ScheduleAIRecommendation[] @relation("DoctorScheduleAI")
+  
+  // PIPEDA Compliance relationships
+  consentAuditLogs                               ConsentAuditLog[]
+  dataDisposalDisposedBy                         DataDisposalRecord[]   @relation("DataDisposalDisposedBy")
+  dataDisposalAuthorizedBy                       DataDisposalRecord[]   @relation("DataDisposalAuthorizedBy")
+  aiProcessingLogs                               AIDataProcessingLog[]
+  rightsRequestsAssigned                         PatientRightsRequest[]
+  
+  // Enhanced Billing relationships
+  paymentMethodsAdded                            PaymentMethod[]
+  paymentsProcessed                              Payment[]              @relation("PaymentProcessedBy")
+  paymentsRefunded                               Payment[]              @relation("PaymentRefundedBy")
+  claimsSubmitted                                InsuranceClaim[]       @relation("ClaimSubmittedBy")
+  claimsModified                                 InsuranceClaim[]       @relation("ClaimLastModifiedBy")
+  paymentPlansCreated                            PaymentPlan[]          @relation("PaymentPlanCreatedBy")
+  paymentPlansModified                           PaymentPlan[]          @relation("PaymentPlanLastModifiedBy")
 
   @@index([clinicId])
   @@index([email])
@@ -488,3 +603,843 @@ enum UserRole {
   TECHNICIAN
   GUEST
 }
+
+// ================================
+// AI-POWERED DOCTOR DASHBOARD SCHEMA
+// ================================
+// Optimized schema for AI integration with zero breaking changes
+// Added: June 19, 2025
+
+// 1. Doctor AI Profile - Separate from User table for performance
+model DoctorAIProfile {
+  id                    String   @id
+  doctorId              String   @unique
+  aiPreferences         Json?    // AI service configurations
+  confidenceThresholds  Json?    // Minimum confidence levels per AI service
+  enabledServices       String[] @default([]) // Which AI services doctor wants to use
+  lastAIInteraction     DateTime?
+  totalAIInteractions   Int      @default(0)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  
+  doctor                User     @relation("DoctorAIProfile", fields: [doctorId], references: [id], onDelete: Cascade)
+  
+  @@index([doctorId])
+  @@index([lastAIInteraction])
+}
+
+// 2. Doctor Insights - Optimized with proper indexing
+model DoctorInsights {
+  id          String   @id
+  doctorId    String
+  patientId   String?
+  insightType String   // 'RISK_ASSESSMENT', 'FOLLOW_UP', 'ALERT', 'RECOMMENDATION'
+  aiService   String   // 'DOCTOR_AI', 'TRIAGE_AI', 'MENTAL_HEALTH_AI', etc.
+  data        Json
+  confidence  Float
+  priority    Int      @default(0) // 0=low, 1=medium, 2=high, 3=critical
+  isActive    Boolean  @default(true)
+  isRead      Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  expiresAt   DateTime
+  
+  doctor      User     @relation("DoctorInsights", fields: [doctorId], references: [id], onDelete: Cascade)
+  patient     Patient? @relation("PatientInsights", fields: [patientId], references: [id], onDelete: Cascade)
+  
+  // Optimized indexes for common queries
+  @@index([doctorId, isActive, priority, createdAt])
+  @@index([patientId, insightType])
+  @@index([aiService, createdAt])
+  @@index([expiresAt]) // For cleanup jobs
+  @@index([isRead, priority])
+}
+
+// 3. Patient AI Analysis - Efficient caching with hash validation
+model PatientAIAnalysis {
+  id           String   @id
+  patientId    String
+  doctorId     String
+  triageId     String?  // Optional triage relationship
+  analysisType String   // 'DIAGNOSIS', 'CARE_PLAN', 'MENTAL_HEALTH', 'RISK_ASSESSMENT'
+  aiService    String   // 'DOCTOR_AI', 'NURSE_AI', 'MENTAL_HEALTH_AI'
+  
+  // Analysis Results
+  analysis     Json
+  confidence   Float
+  priority     Int      @default(0)
+  
+  // Caching & Performance
+  inputHash    String   // Hash of input data for cache validation
+  isValid      Boolean  @default(true)
+  expiresAt    DateTime // Auto-expire old analysis
+  
+  // Metadata
+  processingTime Int?   // Performance tracking in milliseconds
+  version       String @default("1.0") // AI model version
+  
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  
+  patient      Patient        @relation("PatientAIAnalysis", fields: [patientId], references: [id], onDelete: Cascade)
+  doctor       User           @relation("DoctorAIAnalysis", fields: [doctorId], references: [id], onDelete: Cascade)
+  triage       PatientTriage? @relation("TriageAIAnalysis", fields: [triageId], references: [id], onDelete: SetNull)
+  
+  // Optimized indexes
+  @@index([patientId, analysisType, isValid])
+  @@index([doctorId, createdAt])
+  @@index([triageId])
+  @@index([aiService, version])
+  @@index([expiresAt]) // For cleanup
+  @@unique([patientId, analysisType, inputHash]) // Prevent duplicate analysis
+}
+
+// 4. Diagnostic AI Results - Lightweight storage
+model DiagnosticAIResult {
+  id            String   @id
+  patientId     String
+  doctorId      String
+  diagnosticType String  // 'RADIOLOGY', 'LABORATORY', 'PATHOLOGY'
+  aiService     String   // 'RADIOLOGY_AI', 'LABORATORY_AI'
+  
+  // Core Results
+  findings      String[]
+  confidence    Float
+  urgency       String   @default("ROUTINE") // ROUTINE, URGENT, CRITICAL
+  
+  // Minimal Data Storage
+  summary       String   // AI-generated summary
+  recommendations String[] // Key recommendations only
+  
+  // Reference Data
+  sourceDataUrl String?  // Link to actual images/labs
+  reportGenerated Boolean @default(false)
+  
+  createdAt     DateTime @default(now())
+  
+  patient       Patient  @relation("PatientDiagnostics", fields: [patientId], references: [id], onDelete: Cascade)
+  doctor        User     @relation("DoctorDiagnostics", fields: [doctorId], references: [id], onDelete: Cascade)
+  
+  @@index([patientId, diagnosticType])
+  @@index([doctorId, urgency, createdAt])
+  @@index([aiService, createdAt])
+  @@index([urgency, createdAt])
+}
+
+// 5. Prior Authorization - Complete AI workflow
+model PriorAuthorization {
+  id                    String   @id
+  patientId             String
+  prescriptionId        String?
+  procedureCode         String?  // CPT/HCPCS codes
+  diagnosisCode         String?  // ICD-10 codes
+  insuranceProviderId   String
+  requestedBy           String   // Doctor ID
+  
+  // AI Processing
+  aiProcessingStatus    String   @default("PENDING") // PENDING, PROCESSING, COMPLETED, FAILED
+  aiConfidence          Float?
+  aiRecommendation      String?  // APPROVE, DENY, REVIEW_REQUIRED
+  aiReasoning           Json?    // AI decision explanation
+  
+  // Workflow Status
+  status                String   @default("SUBMITTED") // SUBMITTED, APPROVED, DENIED, PENDING_REVIEW
+  submittedAt           DateTime @default(now())
+  processedAt           DateTime?
+  approvedAt            DateTime?
+  
+  // Clinical Data
+  clinicalData          Json     // Extracted clinical information
+  supportingDocuments   String[] @default([]) // Document URLs
+  medicalNecessity      String?  // AI-generated justification
+    // Insurance Response
+  insuranceResponse     Json?    // Response from insurance API
+  authorizationNumber   String?  @unique // If approved
+  validFrom             DateTime?
+  validUntil            DateTime?
+    // Relationships
+  patient               Patient           @relation("PatientPriorAuth", fields: [patientId], references: [id])
+  prescription          Prescription?     @relation("PrescriptionPriorAuth", fields: [prescriptionId], references: [id])
+  insuranceProvider     InsuranceProvider @relation("InsurancePriorAuth", fields: [insuranceProviderId], references: [id])
+  requestedByUser       User              @relation("DoctorPriorAuth", fields: [requestedBy], references: [id])
+  aiAnalysis            PriorAuthAIAnalysis[]
+  insuranceClaims       InsuranceClaim[]  // Claims using this authorization
+  
+  // Optimized indexes
+  @@index([patientId, status])
+  @@index([requestedBy, status, submittedAt])
+  @@index([aiProcessingStatus])
+  @@index([status, submittedAt])
+  @@index([validUntil]) // For expiration checking
+  @@index([authorizationNumber])
+}
+
+// 6. Prior Authorization AI Analysis
+model PriorAuthAIAnalysis {
+  id                    String   @id
+  priorAuthId           String
+  aiService             String   @default("PRIOR_AUTH_AI")
+  
+  // Clinical Data Extraction
+  extractedData         Json     // AI-extracted clinical information
+  payerRequirements     Json     // Matched payer requirements
+  complianceScore       Float    // How well request meets requirements (0-1)
+  
+  // Decision Support
+  recommendation        String   // APPROVE, DENY, NEEDS_MORE_INFO
+  confidence            Float
+  reasoning             String   // AI explanation
+  riskFactors           String[] @default([]) // Identified risk factors
+  
+  // Process Optimization
+  processingTime        Int      // Milliseconds
+  dataQuality          Float    // Quality of input data (0-1)
+  improvementSuggestions String? // How to improve approval chances
+  
+  createdAt             DateTime @default(now())
+  
+  priorAuth             PriorAuthorization @relation(fields: [priorAuthId], references: [id], onDelete: Cascade)
+  
+  @@index([priorAuthId])
+  @@index([recommendation, confidence])
+  @@index([aiService, createdAt])
+}
+
+// 7. Medication AI Analysis - Enhanced prescription safety
+model MedicationAIAnalysis {
+  id             String   @id
+  prescriptionId String
+  patientId      String
+  doctorId       String
+  analysisType   String   // 'INTERACTION', 'DOSAGE', 'AUTHORIZATION', 'ALLERGY_CHECK'
+  aiService      String   // 'PHARMACIST_AI', 'PRIOR_AUTH_AI'
+  
+  // Analysis Results
+  analysis       Json
+  alerts         String[] @default([])
+  confidence     Float
+  severity       String   @default("LOW") // LOW, MEDIUM, HIGH, CRITICAL
+  
+  // Recommendations
+  recommendations String[] @default([])
+  alternativeMeds String[] @default([])
+  
+  createdAt      DateTime @default(now())
+  
+  prescription   Prescription @relation("PrescriptionAIAnalysis", fields: [prescriptionId], references: [id], onDelete: Cascade)
+  patient        Patient      @relation("PatientMedAnalysis", fields: [patientId], references: [id], onDelete: Cascade)
+  doctor         User         @relation("DoctorMedAnalysis", fields: [doctorId], references: [id], onDelete: Cascade)
+  
+  @@index([prescriptionId, analysisType])
+  @@index([patientId, severity])
+  @@index([doctorId, createdAt])
+  @@index([severity, createdAt])
+}
+
+// 8. Clinical AI Coding - Medical coding automation
+model ClinicalAICoding {
+  id           String   @id
+  noteId       String?
+  patientId    String?
+  doctorId     String
+  aiService    String   @default("MEDICAL_CODING_AI")
+  
+  // Coding Results
+  icd10Codes   String[] @default([])
+  cptCodes     String[] @default([])
+  hcpcsCodes   String[] @default([])
+  confidence   Float
+  
+  // Quality Metrics
+  reviewed     Boolean  @default(false)
+  reviewedBy   String?
+  reviewedAt   DateTime?
+  
+  // Source Data
+  sourceText   String?  // Original clinical text
+  extractedData Json?   // Structured data extraction
+  
+  createdAt    DateTime @default(now())
+  
+  note         ProviderNote? @relation("NoteCoding", fields: [noteId], references: [id])
+  patient      Patient?      @relation("PatientCoding", fields: [patientId], references: [id])
+  doctor       User          @relation("DoctorCoding", fields: [doctorId], references: [id])
+  reviewer     User?         @relation("CodingReviewer", fields: [reviewedBy], references: [id])
+  
+  @@index([doctorId, reviewed])
+  @@index([patientId, createdAt])
+  @@index([noteId])
+  @@index([reviewed, confidence])
+}
+
+// 9. Schedule AI Recommendations - Intelligent scheduling
+model ScheduleAIRecommendation {
+  id             String   @id
+  doctorId       String
+  patientId      String?
+  recommendation String   // 'OPTIMAL_TIME', 'RESCHEDULE', 'EXTEND_SLOT', 'BUFFER_TIME'
+  priority       Int      // 1-10 priority score
+  aiService      String   @default("APPOINTMENT_AI")
+  
+  // Recommendation Data
+  data           Json     // Detailed recommendation data
+  confidence     Float
+  reasoning      String?  // Why this recommendation
+  
+  // Implementation
+  status         String   @default("PENDING") // PENDING, ACCEPTED, REJECTED, EXPIRED
+  implementedAt  DateTime?
+  
+  createdAt      DateTime @default(now())
+  expiresAt      DateTime // Recommendations expire
+  
+  doctor         User     @relation("DoctorScheduleAI", fields: [doctorId], references: [id])
+  patient        Patient? @relation("PatientScheduleAI", fields: [patientId], references: [id])
+  
+  @@index([doctorId, status, priority])
+  @@index([patientId, status])
+  @@index([expiresAt])
+  @@index([status, priority, createdAt])
+}
+
+// =============================================================================
+// PIPEDA COMPLIANCE MODELS - Patient Consent & Data Governance
+// =============================================================================
+
+model PatientConsent {
+  id                    String   @id
+  patientId             String   @unique
+  
+  // Core Consent Categories
+  basicCare             Boolean  @default(true)   // Required for healthcare
+  aiAnalysis            Boolean  @default(false)  // AI clinical analysis
+  aiDiagnostics         Boolean  @default(false)  // AI diagnostic tools
+  aiMedication          Boolean  @default(false)  // AI medication analysis
+  aiMentalHealth        Boolean  @default(false)  // Mental health AI
+  aiTriage              Boolean  @default(false)  // AI triage analysis
+  dataSharing           Boolean  @default(false)  // Healthcare team sharing
+  research              Boolean  @default(false)  // Research purposes
+  administrative        Boolean  @default(true)   // Billing, scheduling
+  
+  // AI Service Specific Consent
+  doctorAIAssistant     Boolean  @default(false)
+  radiologyAI           Boolean  @default(false)
+  laboratoryAI          Boolean  @default(false)
+  pharmacistAI          Boolean  @default(false)
+  mentalHealthAI        Boolean  @default(false)
+  priorAuthAI           Boolean  @default(false)
+  medicalCodingAI       Boolean  @default(false)
+  patientCommunicationAI Boolean @default(false)
+  
+  // Consent Metadata
+  consentVersion        String   @default("1.0")  // Version of consent form
+  consentMethod         String   // 'ELECTRONIC', 'VERBAL', 'WRITTEN'
+  witnessedBy           String?  // Staff member who witnessed
+  ipAddress             String?  // For electronic consent
+  deviceInfo            String?  // Device used for consent
+  
+  // Consent Lifecycle
+  consentGivenAt        DateTime @default(now())
+  consentExpiresAt      DateTime? // Some consents may expire
+  lastReviewedAt        DateTime? // Last time patient reviewed
+  withdrawnAt           DateTime? // If consent withdrawn
+  withdrawnBy           String?   // Who processed withdrawal
+  withdrawalReason      String?   // Reason for withdrawal
+  
+  // PIPEDA Rights
+  dataAccessRequested   DateTime? // When patient requested data access
+  dataCorrectionRequested DateTime? // When patient requested correction
+  dataPortabilityRequested DateTime? // When patient requested data export
+  
+  // Relationships
+  patient               Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  auditLogs             ConsentAuditLog[]
+  
+  @@index([patientId])
+  @@index([consentGivenAt])
+  @@index([withdrawnAt])
+}
+
+model ConsentAuditLog {
+  id                    String   @id
+  patientId             String
+  consentId             String
+  
+  // Change Details
+  action                String   // 'GRANTED', 'WITHDRAWN', 'MODIFIED', 'REVIEWED'
+  changedFields         String[] // Which consent fields changed
+  previousValues        Json?    // Previous consent state
+  newValues             Json?    // New consent state
+  
+  // Actor Information
+  changedBy             String   // User ID who made change
+  changedByRole         String   // Role of person making change
+  patientInitiated      Boolean  @default(false) // Did patient initiate?
+  
+  // Context
+  reason                String?  // Reason for change
+  method                String   // How change was made
+  ipAddress             String?
+  deviceInfo            String?
+  
+  // Compliance
+  legalBasis            String   // Legal basis for processing
+  dataController        String   // Who is the data controller
+  
+  createdAt             DateTime @default(now())
+  
+  patient               Patient  @relation(fields: [patientId], references: [id])
+  consent               PatientConsent @relation(fields: [consentId], references: [id])
+  changedByUser         User     @relation(fields: [changedBy], references: [id])
+  
+  @@index([patientId, createdAt])
+  @@index([changedBy])
+  @@index([action])
+}
+
+model DataRetentionPolicy {
+  id                    String   @id
+  dataCategory          String   // 'PHI', 'AI_ANALYSIS', 'DIAGNOSTIC', 'MEDICATION'
+  
+  // Retention Rules
+  retentionPeriodYears  Int      // Years to retain
+  legalBasis            String   // Legal requirement for retention
+  disposalMethod        String   // How to dispose of data
+  
+  // Policy Details
+  description           String
+  applicableLaws        String[] // PIPEDA, provincial laws, etc.
+  lastReviewedAt        DateTime
+  effectiveFrom         DateTime @default(now())
+  effectiveUntil        DateTime?
+  
+  @@index([dataCategory])
+  @@index([effectiveFrom, effectiveUntil])
+}
+
+model DataDisposalRecord {
+  id                    String   @id
+  patientId             String?  // Null if bulk disposal
+  
+  // Disposal Details
+  dataCategory          String   // What type of data
+  disposalReason        String   // 'RETENTION_EXPIRED', 'PATIENT_REQUEST', 'LEGAL_REQUIREMENT'
+  disposalMethod        String   // 'SECURE_DELETE', 'ANONYMIZATION', 'ARCHIVE'
+  
+  // Data Identification
+  recordsAffected       Int      // Number of records
+  dataIdentifiers       String[] // IDs of disposed records
+  disposalHash          String   // Hash proof of disposal
+  
+  // Compliance
+  disposedBy            String   // User who performed disposal
+  authorizedBy          String   // User who authorized disposal
+  legalBasis            String   // Legal basis for disposal
+  
+  // Verification
+  verificationMethod    String   // How disposal was verified
+  verifiedAt            DateTime?
+  verifiedBy            String?
+  
+  disposedAt            DateTime @default(now())
+  
+  patient               Patient? @relation(fields: [patientId], references: [id])
+  disposedByUser        User     @relation("DataDisposalDisposedBy", fields: [disposedBy], references: [id])
+  authorizedByUser      User     @relation("DataDisposalAuthorizedBy", fields: [authorizedBy], references: [id])
+  
+  @@index([patientId])
+  @@index([disposedAt])
+  @@index([dataCategory])
+}
+
+model AIDataProcessingLog {
+  id                    String   @id
+  patientId             String
+  
+  // AI Processing Details
+  aiService             String   // Which AI service processed data
+  processingPurpose     String   // Why data was processed
+  dataCategories        String[] // What types of data were used
+  
+  // Consent Verification
+  consentVerified       Boolean  // Was consent checked?
+  consentVersion        String   // Version of consent at time of processing
+  missingConsents       String[] // Any missing consent categories
+  
+  // Data Minimization
+  dataMinimized         Boolean  // Was data minimized for purpose?
+  dataFields            String[] // Specific fields processed
+  dataRetentionDays     Int      // How long AI service retains data
+  
+  // Processing Results
+  processingSuccessful  Boolean
+  confidenceScore       Float?
+  resultsRetained       Boolean  // Are results stored?
+  resultsShared         Boolean  // Were results shared?
+  
+  // Compliance
+  legalBasis            String   // Legal basis for processing
+  dataController        String   // Who controls the data
+  dataProcessor         String   // AI service provider
+  transferMechanism     String?  // If data transferred (adequacy, SCC, etc.)
+  
+  // Audit Trail
+  processedBy           String   // User who initiated processing
+  processedAt           DateTime @default(now())
+  
+  patient               Patient  @relation(fields: [patientId], references: [id])
+  processedByUser       User     @relation(fields: [processedBy], references: [id])
+  
+  @@index([patientId, aiService])
+  @@index([processedAt])
+  @@index([consentVerified])
+}
+
+model PatientRightsRequest {
+  id                    String   @id
+  patientId             String
+  
+  // Request Details
+  requestType           String   // 'ACCESS', 'CORRECTION', 'WITHDRAWAL', 'PORTABILITY', 'COMPLAINT'
+  description           String
+  specificData          String[] // Specific data requested
+  
+  // Request Processing
+  status                String   @default("RECEIVED") // RECEIVED, PROCESSING, COMPLETED, DENIED
+  assignedTo            String?  // Staff member handling request
+  
+  // Response
+  responseDeadline      DateTime // 30 days from receipt (PIPEDA requirement)
+  responseProvided      Boolean  @default(false)
+  responseMethod        String?  // How response was provided
+  responseDetails       String?
+  
+  // Denial (if applicable)
+  denialReason          String?  // If request denied
+  denialLegalBasis      String?  // Legal basis for denial
+  appealRights          String?  // How to appeal denial
+  
+  // Compliance
+  verificationMethod    String   // How patient identity was verified
+  verifiedAt            DateTime?
+  processingFee         Float?   // If fee charged (rare in healthcare)
+  
+  requestedAt           DateTime @default(now())
+  completedAt           DateTime?
+  
+  patient               Patient  @relation(fields: [patientId], references: [id])
+  assignedToUser        User?    @relation(fields: [assignedTo], references: [id])
+  
+  @@index([patientId, requestType])
+  @@index([status, responseDeadline])
+  @@index([requestedAt])
+}
+
+// =============================================================================
+// ENHANCED BILLING SYSTEM - Insurance + Patient Payments
+// =============================================================================
+
+model PaymentMethod {
+  id                    String   @id
+  patientId             String
+  
+  // Payment Method Details
+  type                  String   // 'CREDIT_CARD', 'DEBIT_CARD', 'BANK_ACCOUNT', 'DIGITAL_WALLET', 'CASH', 'CHECK'
+  provider              String?  // 'VISA', 'MASTERCARD', 'AMEX', 'PAYPAL', 'APPLE_PAY', etc.
+  
+  // Card/Account Details (encrypted)
+  lastFourDigits        String?  // Last 4 digits for display
+  expiryMonth           Int?     // For cards
+  expiryYear            Int?     // For cards
+  cardholderName        String?  // Name on card
+  
+  // Bank Details
+  bankName              String?  // For bank accounts
+  accountType           String?  // 'CHECKING', 'SAVINGS'
+  routingNumber         String?  // Encrypted routing number
+  
+  // Digital Wallet
+  walletId              String?  // Digital wallet identifier
+  walletProvider        String?  // Provider name
+  
+  // Security & Validation
+  isVerified            Boolean  @default(false)
+  verificationMethod    String?  // How payment method was verified
+  tokenizedData         String?  // Tokenized payment data
+  fingerprint           String?  // Unique fingerprint for duplicate detection
+  
+  // Status & Preferences
+  isActive              Boolean  @default(true)
+  isPrimary             Boolean  @default(false) // Primary payment method
+  isDefault             Boolean  @default(false) // Default for auto-pay
+  
+  // Billing Address
+  billingStreet         String?
+  billingCity           String?
+  billingProvince       String?
+  billingPostalCode     String?
+  billingCountry        String   @default("CA")
+  
+  // Metadata
+  addedBy               String   // User who added this method
+  lastUsed              DateTime?
+  usageCount            Int      @default(0)
+  
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+    // Relationships
+  patient               Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  addedByUser           User     @relation(fields: [addedBy], references: [id])
+  payments              Payment[]
+  paymentPlans          PaymentPlan[] // Payment plans using this method
+  
+  @@index([patientId, isActive])
+  @@index([type, provider])
+  @@index([isPrimary, isDefault])
+}
+
+model Payment {
+  id                    String   @id
+  patientId             String
+  paymentMethodId       String?  // Null for cash payments
+  
+  // Payment Details
+  amount                Float    // Total payment amount
+  currency              String   @default("CAD")
+  type                  String   // 'COPAY', 'DEDUCTIBLE', 'COINSURANCE', 'FULL_PAYMENT', 'INSTALLMENT'
+  
+  // Payment Processing
+  status                String   @default("PENDING") // PENDING, PROCESSING, COMPLETED, FAILED, REFUNDED
+  paymentProcessor      String?  // 'STRIPE', 'SQUARE', 'MONERIS', 'CASH_REGISTER'
+  processorTransactionId String? // External transaction ID
+  processorResponse     Json?    // Full processor response
+  
+  // Payment Source Split
+  insuranceAmount       Float    @default(0) // Amount paid by insurance
+  patientAmount         Float    // Amount paid by patient
+  copayAmount           Float    @default(0) // Patient copay
+  deductibleAmount      Float    @default(0) // Deductible portion
+  coinsuranceAmount     Float    @default(0) // Coinsurance portion
+  
+  // Transaction Details
+  description           String   // Payment description
+  invoiceNumber         String?  // Related invoice
+  receiptNumber         String?  // Receipt number
+  authorizationCode     String?  // Payment authorization
+  
+  // Refund Information
+  refundAmount          Float    @default(0)
+  refundReason          String?
+  refundedAt            DateTime?
+  refundedBy            String?
+  
+  // Compliance & Audit
+  processedBy           String   // User who processed payment
+  ipAddress             String?  // For online payments
+  deviceInfo            String?  // Device used for payment
+  riskScore             Float?   // Fraud risk score
+  
+  // Timing
+  paidAt                DateTime @default(now())
+  dueDate               DateTime? // When payment was due
+  scheduledDate         DateTime? // For scheduled payments
+    // Relationships
+  patient               Patient      @relation(fields: [patientId], references: [id])
+  paymentMethod         PaymentMethod? @relation(fields: [paymentMethodId], references: [id])
+  processedByUser       User         @relation("PaymentProcessedBy", fields: [processedBy], references: [id])
+  refundedByUser        User?        @relation("PaymentRefundedBy", fields: [refundedBy], references: [id])
+  billingRecord         BillingRecord? @relation(fields: [invoiceNumber], references: [invoiceNumber])
+  installments          PaymentPlanInstallment[] @relation("PaymentInstallments")
+  
+  @@index([patientId, status])
+  @@index([status, paidAt])
+  @@index([paymentProcessor, processorTransactionId])
+  @@index([invoiceNumber])
+}
+
+model InsuranceClaim {
+  id                    String   @id
+  patientId             String
+  insuranceProviderId   String
+  
+  // Claim Details
+  claimNumber           String   @unique // External claim number
+  internalClaimId       String   @unique // Internal tracking ID
+  claimType             String   // 'PRIMARY', 'SECONDARY', 'TERTIARY'
+  
+  // Financial Details
+  billedAmount          Float    // Amount billed to insurance
+  allowedAmount         Float?   // Amount allowed by insurance
+  paidAmount            Float    @default(0) // Amount paid by insurance
+  adjustmentAmount      Float    @default(0) // Adjustments/write-offs
+  patientResponsibility Float    @default(0) // Patient owes
+  
+  // Claim Status
+  status                String   @default("SUBMITTED") // SUBMITTED, PENDING, APPROVED, DENIED, PARTIAL, APPEAL
+  statusReason          String?  // Reason for current status
+  denialReason          String?  // If denied
+  denialCode            String?  // Insurance denial code
+  
+  // Processing Details
+  submittedAt           DateTime @default(now())
+  acknowledgedAt        DateTime? // When insurance acknowledged
+  processedAt           DateTime? // When insurance processed
+  paidAt                DateTime? // When insurance paid
+  
+  // Service Details
+  serviceDate           DateTime // Date of service
+  serviceProvider       String   // Provider who delivered service
+  serviceCodes          String[] // CPT/HCPCS codes
+  diagnosisCodes        String[] // ICD-10 codes
+  placeOfService        String   // Where service was provided
+  
+  // Prior Authorization
+  priorAuthRequired     Boolean  @default(false)
+  priorAuthNumber       String?  // Authorization number
+  priorAuthStatus       String?  // Authorization status
+  
+  // Appeals
+  appealCount           Int      @default(0)
+  lastAppealDate        DateTime?
+  appealStatus          String?  // If appealed
+  
+  // Audit Trail
+  submittedBy           String   // User who submitted claim
+  lastModifiedBy        String   // Last user to modify
+  
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  
+  // Relationships
+  patient               Patient          @relation(fields: [patientId], references: [id])
+  insuranceProvider     InsuranceProvider @relation(fields: [insuranceProviderId], references: [id])
+  submittedByUser       User             @relation("ClaimSubmittedBy", fields: [submittedBy], references: [id])
+  lastModifiedByUser    User             @relation("ClaimLastModifiedBy", fields: [lastModifiedBy], references: [id])
+  priorAuthorization    PriorAuthorization? @relation(fields: [priorAuthNumber], references: [authorizationNumber])
+  
+  @@index([patientId, status])
+  @@index([insuranceProviderId, status])
+  @@index([claimNumber])
+  @@index([serviceDate])
+  @@index([submittedAt])
+}
+
+model PaymentPlan {
+  id                    String   @id
+  patientId             String
+  
+  // Plan Details
+  totalAmount           Float    // Total amount to be paid
+  downPayment           Float    @default(0) // Initial payment
+  remainingBalance      Float    // Current remaining balance
+  installmentAmount     Float    // Amount per installment
+  numberOfInstallments  Int      // Total number of payments
+  installmentsPaid      Int      @default(0) // Payments made so far
+  
+  // Payment Schedule
+  frequency             String   // 'WEEKLY', 'BI_WEEKLY', 'MONTHLY', 'QUARTERLY'
+  startDate             DateTime // When payments start
+  nextPaymentDate       DateTime // Next scheduled payment
+  finalPaymentDate      DateTime // When plan completes
+  
+  // Terms & Conditions
+  interestRate          Float    @default(0) // Annual interest rate
+  lateFee               Float    @default(0) // Late payment fee
+  gracePeriodDays       Int      @default(7) // Grace period for late payments
+  
+  // Status
+  status                String   @default("ACTIVE") // ACTIVE, COMPLETED, DEFAULTED, CANCELLED
+  autoPayEnabled        Boolean  @default(false) // Automatic payments
+  paymentMethodId       String?  // Default payment method for auto-pay
+  
+  // Agreement
+  agreementSigned       Boolean  @default(false)
+  agreementSignedAt     DateTime?
+  agreementSignedBy     String?  // Patient or authorized person
+  agreementDocument     String?  // URL to signed agreement
+  
+  // Notifications
+  reminderDaysBefore    Int      @default(3) // Days before payment due
+  lastReminderSent      DateTime?
+  overdueNoticeSent     Boolean  @default(false)
+  
+  // Audit
+  createdBy             String   // User who created plan
+  lastModifiedBy        String   // Last user to modify
+  
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  
+  // Relationships
+  patient               Patient       @relation(fields: [patientId], references: [id])
+  paymentMethod         PaymentMethod? @relation(fields: [paymentMethodId], references: [id])
+  createdByUser         User          @relation("PaymentPlanCreatedBy", fields: [createdBy], references: [id])
+  lastModifiedByUser    User          @relation("PaymentPlanLastModifiedBy", fields: [lastModifiedBy], references: [id])
+  payments              PaymentPlanInstallment[]
+  
+  @@index([patientId, status])
+  @@index([nextPaymentDate])
+  @@index([status, autoPayEnabled])
+}
+
+model PaymentPlanInstallment {
+  id                    String   @id
+  paymentPlanId         String
+  paymentId             String?  // Linked payment if paid
+  
+  // Installment Details
+  installmentNumber     Int      // Which installment (1, 2, 3, etc.)
+  amount                Float    // Amount due for this installment
+  dueDate               DateTime // When this installment is due
+  
+  // Payment Status
+  status                String   @default("PENDING") // PENDING, PAID, LATE, SKIPPED
+  paidAmount            Float    @default(0) // Amount actually paid
+  paidDate              DateTime? // When payment was made
+  lateFee               Float    @default(0) // Applied late fee
+  
+  // Late Payment Tracking
+  daysPastDue           Int      @default(0)
+  remindersSent         Int      @default(0)
+  lastReminderSent      DateTime?
+  
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+    // Relationships
+  paymentPlan           PaymentPlan @relation(fields: [paymentPlanId], references: [id], onDelete: Cascade)
+  payment               Payment?    @relation("PaymentInstallments", fields: [paymentId], references: [id])
+    @@index([paymentPlanId, installmentNumber])
+  @@index([dueDate, status])
+  @@index([status, daysPastDue])
+}
+
+// Clinical Documentation Model
+model ClinicalNote {
+  id               String   @id
+  patientId        String
+  providerId       String
+  appointmentId    String?  // Optional appointment link
+  triageId         String?  // Optional triage link
+  title            String
+  noteType         String   // clinical_note, prescription_note, progress_note, discharge_summary
+  content          String
+  tags             String[] @default([])
+  isConfidential   Boolean  @default(false)
+  status           String   @default("DRAFT") // DRAFT, FINAL, AMENDED
+  
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  
+  // Relationships
+  Patient          Patient       @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  Provider         User          @relation("ProviderNotes", fields: [providerId], references: [id])
+  ScheduleSlot     ScheduleSlot? @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
+  PatientTriage    PatientTriage? @relation(fields: [triageId], references: [id], onDelete: SetNull)
+  
+  @@index([patientId, providerId])
+  @@index([noteType, status])
+  @@index([createdAt])
+}
+
+// =============================================================================
+// ENHANCED EXISTING MODELS WITH NEW RELATIONSHIPS
+// =============================================================================

@@ -14,7 +14,9 @@
     "detect:circular": "node scripts/detect-circular-deps.cjs",
     "test:auth": "powershell -ExecutionPolicy Bypass -File .\\Test-AuthSystem.ps1 -Full",
     "test:auth:integration": "powershell -ExecutionPolicy Bypass -File .\\Test-AuthSystem.ps1 -Integration",
-    "test:auth:realworld": "powershell -ExecutionPolicy Bypass -File .\\Test-AuthSystem.ps1 -RealWorld"
+    "test:auth:realworld": "powershell -ExecutionPolicy Bypass -File .\\Test-AuthSystem.ps1 -RealWorld",
+    "test:doctor-apis": "node scripts/test-doctor-apis.cjs",
+    "seed:database": "node scripts/seed-database.cjs"
   },
   "dependencies": {
     "@prisma/client": "^6.8.2",

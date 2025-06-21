@@ -165,8 +165,9 @@ function LoginContent() {
         
         // Redirect to 2FA verification page with the token
         router.push(`/verify-2fa?token=${twoFactorData.token}`);
-        return;
-      }      // Successful login without 2FA - determine correct redirect based on user role
+        return;      }
+
+      // Successful login without 2FA - determine correct redirect based on user role
       if (result.user.role === UserRole.ADMIN) {
         // Redirect admin users to the admin dashboard with cache-busting parameter
         const timestamp = Date.now();
@@ -182,6 +183,21 @@ function LoginContent() {
         
         // Use replace instead of push for better back-button behavior
         router.replace(`${targetPath}?t=${timestamp}`);
+      } else if (result.user.role === UserRole.DOCTOR) {
+        // Redirect doctors to the new doctor dashboard
+        const timestamp = Date.now();
+        
+        // Check if we have a stored path from a previous session
+        let targetPath = '/doctor';
+        if (typeof sessionStorage !== 'undefined') {
+          const lastPath = sessionStorage.getItem('lastAuthenticatedPath');
+          if (lastPath && lastPath.startsWith('/doctor')) {
+            targetPath = lastPath;
+          }
+        }
+        
+        // Use replace instead of push for better back-button behavior
+        router.replace(`${targetPath}?t=${timestamp}`);
       } else {
         // Redirect other users to the regular dashboard or requested page with cache-busting
         const timestamp = Date.now();
@@ -190,13 +206,14 @@ function LoginContent() {
         let targetPath = redirect === '/dashboard' ? redirect : redirect;
         if (typeof sessionStorage !== 'undefined') {
           const lastPath = sessionStorage.getItem('lastAuthenticatedPath');
-          if (lastPath && !lastPath.startsWith('/admin')) {
+          if (lastPath && !lastPath.startsWith('/admin') && !lastPath.startsWith('/doctor')) {
             targetPath = lastPath;
           }
         }
         
         router.replace(`${targetPath}?t=${timestamp}`);
-      }      } catch (err) {
+      }
+    } catch (err) {
       console.error('Login error:', err);
       
       // Enhanced error logging for authentication failures
